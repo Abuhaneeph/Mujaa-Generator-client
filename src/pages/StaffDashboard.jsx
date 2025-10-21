@@ -39,6 +39,54 @@ export default function StaffDashboard() {
     }
   };
 
+  const handleDownloadPdf = async (docId, action = 'download') => {
+    try {
+      const response = await fetch(`${API_URL}/api/staff/document/${docId}/download?action=${action}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Download error:', error);
+        alert(error.message || 'Failed to download PDF');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      if (action === 'view') {
+        window.open(url, '_blank');
+      } else {
+        // Parse filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'document.pdf';
+        
+        if (contentDisposition) {
+          // Extract filename from: filename="Name (PEN XXXXX).pdf"
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1];
+          }
+        }
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download PDF');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -101,7 +149,7 @@ export default function StaffDashboard() {
               <table>
                 <thead>
                   <tr>
-                    <th>Policy #</th>
+                    <th>Pension #</th>
                     <th>Client Name</th>
                     <th>Status</th>
                     <th>Date</th>
@@ -118,7 +166,7 @@ export default function StaffDashboard() {
                   ) : (
                     myDocuments.map((doc) => (
                       <tr key={doc.id}>
-                        <td>{doc.policy_number}</td>
+                        <td>{doc.client_pension_no || doc.policy_number}</td>
                         <td>{doc.client_name}</td>
                         <td>
                           <span className={`status-badge status-${doc.status}`}>
@@ -127,12 +175,68 @@ export default function StaffDashboard() {
                         </td>
                         <td>{new Date(doc.generated_at).toLocaleDateString()}</td>
                         <td>
-                          <button 
-                            className="btn-sm"
-                            onClick={() => navigate(`/staff/document/${doc.id}`)}
-                          >
-                            View
-                          </button>
+                          {doc.indicative_pdf_path ? (
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                              <button 
+                                onClick={() => handleDownloadPdf(doc.id, 'view')}
+                                className="btn-view"
+                                style={{
+                                  color: '#10b981',
+                                  textDecoration: 'none',
+                                  fontWeight: '500',
+                                  fontSize: '0.875rem',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  border: '1px solid #10b981',
+                                  display: 'inline-block',
+                                  transition: 'all 0.2s',
+                                  cursor: 'pointer',
+                                  backgroundColor: 'transparent'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.target.style.backgroundColor = '#10b981';
+                                  e.target.style.color = 'white';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.target.style.backgroundColor = 'transparent';
+                                  e.target.style.color = '#10b981';
+                                }}
+                              >
+                                👁️ View PDF
+                              </button>
+                              <button 
+                                onClick={() => handleDownloadPdf(doc.id, 'download')}
+                                className="btn-download"
+                                style={{
+                                  color: '#3b82f6',
+                                  textDecoration: 'none',
+                                  fontWeight: '500',
+                                  fontSize: '0.875rem',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  border: '1px solid #3b82f6',
+                                  display: 'inline-block',
+                                  transition: 'all 0.2s',
+                                  cursor: 'pointer',
+                                  backgroundColor: 'transparent'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.target.style.backgroundColor = '#3b82f6';
+                                  e.target.style.color = 'white';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.target.style.backgroundColor = 'transparent';
+                                  e.target.style.color = '#3b82f6';
+                                }}
+                              >
+                                📥 Download PDF
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ color: '#9ca3af', fontSize: '0.875rem' }}>
+                              N/A
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))

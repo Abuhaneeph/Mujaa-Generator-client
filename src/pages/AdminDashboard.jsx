@@ -8,6 +8,10 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [recentDocuments, setRecentDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDocuments, setSelectedDocuments] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { token, logout, user } = useAuth();
   const navigate = useNavigate();
 
@@ -34,6 +38,143 @@ export default function AdminDashboard() {
       console.error('Failed to fetch dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async (docId, action = 'download') => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/documents/${docId}/download?action=${action}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Download error:', error);
+        alert(error.message || 'Failed to download PDF');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      if (action === 'view') {
+        window.open(url, '_blank');
+      } else {
+        // Parse filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'document.pdf';
+        
+        if (contentDisposition) {
+          // Extract filename from: filename="Name (PEN XXXXX).pdf"
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1];
+          }
+        }
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download PDF');
+    }
+  };
+
+  const handleSelectDocument = (docId) => {
+    setSelectedDocuments(prev => {
+      if (prev.includes(docId)) {
+        return prev.filter(id => id !== docId);
+      } else {
+        return [...prev, docId];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDocuments.length === recentDocuments.length) {
+      setSelectedDocuments([]);
+    } else {
+      setSelectedDocuments(recentDocuments.map(doc => doc.id));
+    }
+  };
+
+  const handleDeleteDocument = async (docId) => {
+    setDeleteTarget([docId]);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDocuments.length === 0) {
+      alert('Please select documents to delete');
+      return;
+    }
+    setDeleteTarget(selectedDocuments);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      if (!deleteTarget || deleteTarget.length === 0) return;
+
+      setIsDeleting(true);
+
+      if (deleteTarget.length === 1) {
+        // Single delete
+        const response = await fetch(`${API_URL}/api/admin/documents/${deleteTarget[0]}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to delete document');
+        }
+
+        alert('Document deleted successfully');
+      } else {
+        // Bulk delete
+        const response = await fetch(`${API_URL}/api/admin/documents/bulk/delete`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ documentIds: deleteTarget })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to delete documents');
+        }
+
+        const result = await response.json();
+        alert(`${result.deletedCount} document(s) deleted successfully`);
+      }
+
+      // Refresh dashboard data
+      setSelectedDocuments([]);
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+      setIsDeleting(false);
+      fetchDashboardData();
+
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert(error.message || 'Failed to delete document(s)');
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+      setIsDeleting(false);
     }
   };
 
@@ -100,27 +241,63 @@ export default function AdminDashboard() {
           </div>
 
           <div className="section">
-            <h2>Recent Documents</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2>Recent Documents</h2>
+              {selectedDocuments.length > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  style={{
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: '500',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  🗑️ Delete Selected ({selectedDocuments.length})
+                </button>
+              )}
+            </div>
             <div className="table-container">
               <table>
                 <thead>
                   <tr>
-                    <th>Policy #</th>
+                    <th style={{ width: '40px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedDocuments.length === recentDocuments.length && recentDocuments.length > 0}
+                        onChange={handleSelectAll}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th>Pension #</th>
                     <th>Client Name</th>
                     <th>Status</th>
                     <th>Generated By</th>
                     <th>Date</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentDocuments.length === 0 ? (
                     <tr>
-                      <td colSpan="5" style={{textAlign: 'center'}}>No documents yet</td>
+                      <td colSpan="7" style={{textAlign: 'center'}}>No documents yet</td>
                     </tr>
                   ) : (
                     recentDocuments.map((doc) => (
-                      <tr key={doc.id}>
-                        <td>{doc.policy_number}</td>
+                      <tr key={doc.id} style={{ backgroundColor: selectedDocuments.includes(doc.id) ? '#f0f9ff' : 'transparent' }}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedDocuments.includes(doc.id)}
+                            onChange={() => handleSelectDocument(doc.id)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </td>
+                        <td>{doc.client_pension_no || doc.policy_number}</td>
                         <td>{doc.client_name}</td>
                         <td>
                           <span className={`status-badge status-${doc.status}`}>
@@ -129,6 +306,96 @@ export default function AdminDashboard() {
                         </td>
                         <td>{doc.generated_by_name}</td>
                         <td>{new Date(doc.generated_at).toLocaleDateString()}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            {doc.cpanel_pdf_url ? (
+                              <>
+                                <button 
+                                  onClick={() => handleDownloadPdf(doc.id, 'view')}
+                                  className="btn-view"
+                                  title="View PDF"
+                                  style={{
+                                    color: '#10b981',
+                                    fontWeight: '500',
+                                    fontSize: '0.875rem',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #10b981',
+                                    cursor: 'pointer',
+                                    backgroundColor: 'transparent',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseOver={(e) => {
+                                    e.target.style.backgroundColor = '#10b981';
+                                    e.target.style.color = 'white';
+                                  }}
+                                  onMouseOut={(e) => {
+                                    e.target.style.backgroundColor = 'transparent';
+                                    e.target.style.color = '#10b981';
+                                  }}
+                                >
+                                  👁️ View
+                                </button>
+                                <button 
+                                  onClick={() => handleDownloadPdf(doc.id, 'download')}
+                                  className="btn-download"
+                                  title="Download PDF"
+                                  style={{
+                                    color: '#3b82f6',
+                                    fontWeight: '500',
+                                    fontSize: '0.875rem',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #3b82f6',
+                                    cursor: 'pointer',
+                                    backgroundColor: 'transparent',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseOver={(e) => {
+                                    e.target.style.backgroundColor = '#3b82f6';
+                                    e.target.style.color = 'white';
+                                  }}
+                                  onMouseOut={(e) => {
+                                    e.target.style.backgroundColor = 'transparent';
+                                    e.target.style.color = '#3b82f6';
+                                  }}
+                                >
+                                  📥 Download
+                                </button>
+                              </>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '0.875rem' }}>
+                                N/A
+                              </span>
+                            )}
+                            <button 
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              className="btn-delete"
+                              title="Delete Document"
+                              style={{
+                                color: '#ef4444',
+                                fontWeight: '500',
+                                fontSize: '0.875rem',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid #ef4444',
+                                cursor: 'pointer',
+                                backgroundColor: 'transparent',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseOver={(e) => {
+                                e.target.style.backgroundColor = '#ef4444';
+                                e.target.style.color = 'white';
+                              }}
+                              onMouseOut={(e) => {
+                                e.target.style.backgroundColor = 'transparent';
+                                e.target.style.color = '#ef4444';
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -136,6 +403,92 @@ export default function AdminDashboard() {
               </table>
             </div>
           </div>
+
+          {/* Delete Confirmation Modal */}
+          {showDeleteConfirm && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}>
+              <div style={{
+                backgroundColor: 'white',
+                padding: '2rem',
+                borderRadius: '8px',
+                maxWidth: '400px',
+                width: '90%'
+              }}>
+                <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 'bold' }}>
+                  Confirm Delete
+                </h3>
+                {isDeleting ? (
+                  <div style={{ textAlign: 'center', padding: '2rem' }}>
+                    <div style={{ 
+                      display: 'inline-block',
+                      width: '40px',
+                      height: '40px',
+                      border: '4px solid #f3f4f6',
+                      borderTop: '4px solid #ef4444',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                      marginBottom: '1rem'
+                    }} />
+                    <p style={{ color: '#666', fontWeight: '500' }}>
+                      Deleting {deleteTarget?.length} document(s)...
+                    </p>
+                    <p style={{ color: '#999', fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                      Removing from database and Cloudinary
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ marginBottom: '1.5rem', color: '#666' }}>
+                      Are you sure you want to delete {deleteTarget?.length} document(s)? 
+                      This will also remove the file(s) from Cloudinary. This action cannot be undone.
+                    </p>
+                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => {
+                          setShowDeleteConfirm(false);
+                          setDeleteTarget(null);
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          border: '1px solid #d1d5db',
+                          backgroundColor: 'white',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={confirmDelete}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          cursor: 'pointer',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

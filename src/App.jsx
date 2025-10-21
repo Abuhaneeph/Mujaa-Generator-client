@@ -1424,9 +1424,9 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-800 p-4">
+    <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 border border-white/20">
+        <div className="bg-white rounded-2xl shadow-lg p-8">
           <div className="text-center mb-8">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -1440,9 +1440,9 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                     ← Back
                   </button>
                 )}
-              <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full">
+              <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full">
                 <FileText className="w-8 h-8 text-white" />
-                </div>
+              </div>
               </div>
               <button
                 onClick={onLogout}
@@ -2473,9 +2473,19 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                   }}
                   disabled={isLoading}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  title={isLoading ? "Generating and uploading documents..." : "Generate documents with custom order"}
                 >
-                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowUpDown className="w-5 h-5" />}
-                  Generate Custom Order
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Generating & Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUpDown className="w-5 h-5" />
+                      Generate Custom Order
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -2648,7 +2658,7 @@ const UserManagementInline = () => {
   };
 
   return (
-    <div>
+    <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">User Management</h2>
         <button
@@ -2787,14 +2797,52 @@ const UserManagementInline = () => {
 // Import dashboard components (create simple placeholders if files don't exist)
 const AdminDashboardSimple = ({ onLogout, userName }) => {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [dashboardStats, setDashboardStats] = useState({
+    total_documents: 0,
+    pending_documents: 0,
+    active_staff: 0
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  // API URL configuration
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+  // Fetch dashboard statistics
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${apiUrl}/api/admin/dashboard`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setDashboardStats({
+            total_documents: data.stats.total_documents || 0,
+            pending_documents: data.stats.pending_documents || 0,
+            active_staff: data.stats.active_staff || 0
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchDashboardStats();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-md p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-purple-600">Super Admin Dashboard</h1>
+      <nav className="bg-gradient-to-r from-purple-600 to-indigo-700 shadow-lg p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-white">Super Admin Dashboard</h1>
         <div className="flex items-center gap-4">
-          <span className="text-gray-700">Welcome, {userName}</span>
-          <button onClick={onLogout} className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+          <span className="text-white font-medium">Welcome, {userName}</span>
+          <button onClick={onLogout} className="bg-white text-purple-700 px-4 py-2 rounded-lg hover:bg-gray-100 font-semibold transition-colors">
             Logout
           </button>
         </div>
@@ -2802,47 +2850,57 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
       
       <div className="flex">
         {/* Sidebar */}
-        <div className="w-64 bg-white shadow-md min-h-screen p-4">
+        <div className="w-64 bg-gradient-to-b from-gray-800 to-gray-900 shadow-lg min-h-screen p-4">
           <div className="space-y-2">
             <button
               onClick={() => setCurrentTab('dashboard')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'dashboard' ? 'bg-purple-100 text-purple-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'dashboard' 
+                  ? 'bg-purple-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               📊 Dashboard
             </button>
             <button
               onClick={() => setCurrentTab('users')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'users' ? 'bg-purple-100 text-purple-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'users' 
+                  ? 'bg-purple-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               👥 Manage Users
             </button>
             <button
               onClick={() => setCurrentTab('documents')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'documents' ? 'bg-purple-100 text-purple-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'documents' 
+                  ? 'bg-purple-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               📄 All Documents
             </button>
             <button
               onClick={() => setCurrentTab('generate')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'generate' ? 'bg-purple-100 text-purple-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'generate' 
+                  ? 'bg-purple-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               ✏️ Generate Documents
             </button>
             <button
               onClick={() => setCurrentTab('settings')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'settings' ? 'bg-purple-100 text-purple-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'settings' 
+                  ? 'bg-purple-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
-              ⚙️ My Settings
+              ⚙️ System Settings
             </button>
           </div>
         </div>
@@ -2855,15 +2913,33 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h3 className="text-gray-600 mb-2">Total Documents</h3>
-                  <p className="text-3xl font-bold text-purple-600">0</p>
+                  {isLoadingStats ? (
+                    <div className="text-3xl font-bold text-gray-400">
+                      <div className="w-12 h-9 bg-gray-200 animate-pulse rounded"></div>
+                    </div>
+                  ) : (
+                    <p className="text-3xl font-bold text-purple-600">{dashboardStats.total_documents}</p>
+                  )}
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h3 className="text-gray-600 mb-2">Pending Review</h3>
-                  <p className="text-3xl font-bold text-yellow-600">0</p>
+                  {isLoadingStats ? (
+                    <div className="text-3xl font-bold text-gray-400">
+                      <div className="w-12 h-9 bg-gray-200 animate-pulse rounded"></div>
+                    </div>
+                  ) : (
+                    <p className="text-3xl font-bold text-yellow-600">{dashboardStats.pending_documents}</p>
+                  )}
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h3 className="text-gray-600 mb-2">Active Staff</h3>
-                  <p className="text-3xl font-bold text-green-600">0</p>
+                  {isLoadingStats ? (
+                    <div className="text-3xl font-bold text-gray-400">
+                      <div className="w-12 h-9 bg-gray-200 animate-pulse rounded"></div>
+                    </div>
+                  ) : (
+                    <p className="text-3xl font-bold text-green-600">{dashboardStats.active_staff}</p>
+                  )}
                 </div>
               </div>
               <div className="bg-white p-6 rounded-lg shadow">
@@ -3086,6 +3162,10 @@ const AllDocumentsView = () => {
   const [documents, setDocuments] = useState([]);
   const [filter, setFilter] = useState('all');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [selectedDocuments, setSelectedDocuments] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const API_URL = 'http://localhost:3000';
 
@@ -3119,11 +3199,137 @@ const AllDocumentsView = () => {
     }
   };
 
-  const downloadPdf = async (pdfUrl, filename) => {
+  const handleDownloadPdf = async (docId, action = 'download') => {
     try {
-      window.open(pdfUrl, '_blank');
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/admin/documents/${docId}/download?action=${action}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Download error:', error);
+        alert(error.message || 'Failed to download PDF');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      if (action === 'view') {
+        window.open(url, '_blank');
+      } else {
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'document.pdf';
+        
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1];
+          }
+        }
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download error:', error);
+      alert('Failed to download PDF');
+    }
+  };
+
+  const handleSelectDocument = (docId) => {
+    setSelectedDocuments(prev => {
+      if (prev.includes(docId)) {
+        return prev.filter(id => id !== docId);
+      } else {
+        return [...prev, docId];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDocuments.length === documents.length) {
+      setSelectedDocuments([]);
+    } else {
+      setSelectedDocuments(documents.map(doc => doc.id));
+    }
+  };
+
+  const handleDeleteDocument = async (docId) => {
+    setDeleteTarget([docId]);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDocuments.length === 0) {
+      alert('Please select documents to delete');
+      return;
+    }
+    setDeleteTarget(selectedDocuments);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      if (!deleteTarget || deleteTarget.length === 0) return;
+
+      setIsDeleting(true);
+      const token = localStorage.getItem('token');
+
+      if (deleteTarget.length === 1) {
+        const response = await fetch(`${API_URL}/api/admin/documents/${deleteTarget[0]}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to delete document');
+        }
+
+        setMessage({ type: 'success', text: 'Document deleted successfully' });
+      } else {
+        const response = await fetch(`${API_URL}/api/admin/documents/bulk/delete`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ documentIds: deleteTarget })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to delete documents');
+        }
+
+        const result = await response.json();
+        setMessage({ type: 'success', text: `${result.deletedCount} document(s) deleted successfully` });
+      }
+
+      setSelectedDocuments([]);
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+      setIsDeleting(false);
+      fetchDocuments();
+
+    } catch (error) {
+      console.error('Delete error:', error);
+      setMessage({ type: 'error', text: error.message || 'Failed to delete document(s)' });
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+      setIsDeleting(false);
     }
   };
 
@@ -3131,7 +3337,15 @@ const AllDocumentsView = () => {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">All Documents</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {selectedDocuments.length > 0 && (
+            <button 
+              onClick={handleBulkDelete}
+              className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 font-medium"
+            >
+              🗑️ Delete Selected ({selectedDocuments.length})
+            </button>
+          )}
           <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded ${filter === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}>All</button>
           <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded ${filter === 'pending' ? 'bg-yellow-600 text-white' : 'bg-gray-200'}`}>Pending</button>
           <button onClick={() => setFilter('submitted')} className={`px-4 py-2 rounded ${filter === 'submitted' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Submitted</button>
@@ -3140,7 +3354,7 @@ const AllDocumentsView = () => {
       </div>
 
       {message.text && (
-        <div className={`mb-4 p-4 rounded ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+        <div className={`mb-4 p-4 rounded ${message.type === 'success' ? 'bg-green-100 text-green-700' : message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
           {message.text}
         </div>
       )}
@@ -3149,7 +3363,15 @@ const AllDocumentsView = () => {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium">Policy #</th>
+              <th className="px-4 py-3 text-left text-sm font-medium" style={{ width: '40px' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedDocuments.length === documents.length && documents.length > 0}
+                  onChange={handleSelectAll}
+                  className="cursor-pointer"
+                />
+              </th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Pension #</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Client Name</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Generated By</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
@@ -3160,14 +3382,22 @@ const AllDocumentsView = () => {
           <tbody>
             {documents.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                   No documents yet. Documents will appear here when staff generate them.
                 </td>
               </tr>
             ) : (
               documents.map((doc) => (
-                <tr key={doc.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{doc.policy_number}</td>
+                <tr key={doc.id} className={`border-t hover:bg-gray-50 ${selectedDocuments.includes(doc.id) ? 'bg-blue-50' : ''}`}>
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedDocuments.includes(doc.id)}
+                      onChange={() => handleSelectDocument(doc.id)}
+                      className="cursor-pointer"
+                    />
+                  </td>
+                  <td className="px-4 py-3 font-medium">{doc.client_pension_no || doc.policy_number}</td>
                   <td className="px-4 py-3">{doc.client_name}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{doc.generated_by_name}</td>
                   <td className="px-4 py-3">
@@ -3182,14 +3412,35 @@ const AllDocumentsView = () => {
                   </td>
                   <td className="px-4 py-3 text-sm">{new Date(doc.generated_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    {doc.cpanel_pdf_url && (
+                    <div className="flex gap-2 justify-center flex-wrap">
+                      {doc.cpanel_pdf_url ? (
+                        <>
                       <button
-                        onClick={() => downloadPdf(doc.cpanel_pdf_url, `${doc.policy_number}_combined.pdf`)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
+                            onClick={() => handleDownloadPdf(doc.id, 'view')}
+                            className="px-3 py-1 border border-green-500 text-green-600 rounded hover:bg-green-500 hover:text-white transition-colors text-sm font-medium"
+                            title="View PDF"
                       >
-                        View PDF
+                            👁️ View
                       </button>
-                    )}
+                          <button
+                            onClick={() => handleDownloadPdf(doc.id, 'download')}
+                            className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-500 hover:text-white transition-colors text-sm font-medium"
+                            title="Download PDF"
+                          >
+                            📥 Download
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-gray-400 text-sm">N/A</span>
+                      )}
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="px-3 py-1 border border-red-500 text-red-600 rounded hover:bg-red-500 hover:text-white transition-colors text-sm font-medium"
+                        title="Delete Document"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -3197,20 +3448,195 @@ const AllDocumentsView = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '8px',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 'bold' }}>
+              Confirm Delete
+            </h3>
+            {isDeleting ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <div style={{ 
+                  display: 'inline-block',
+                  width: '40px',
+                  height: '40px',
+                  border: '4px solid #f3f4f6',
+                  borderTop: '4px solid #ef4444',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                  marginBottom: '1rem'
+                }} />
+                <p style={{ color: '#666', fontWeight: '500' }}>
+                  Deleting {deleteTarget?.length} document(s)...
+                </p>
+                <p style={{ color: '#999', fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                  Removing from database and Cloudinary
+                </p>
+              </div>
+            ) : (
+              <>
+                <p style={{ marginBottom: '1.5rem', color: '#666' }}>
+                  Are you sure you want to delete {deleteTarget?.length} document(s)? 
+                  This will also remove the file(s) from Cloudinary. This action cannot be undone.
+                </p>
+                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteTarget(null);
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      backgroundColor: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 const StaffDashboardSimple = ({ onLogout, userName }) => {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [myDocuments, setMyDocuments] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  
+  // API URL configuration
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      console.log('🔄 Fetching staff dashboard data from:', `${apiUrl}/api/staff/dashboard`);
+      
+      const response = await fetch(`${apiUrl}/api/staff/dashboard`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log('📡 Dashboard API response status:', response.status, response.ok);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Loaded staff dashboard data:', data);
+        console.log('📄 Recent documents count:', data.recentDocuments?.length || 0);
+        
+        setStats(data.stats);
+        setMyDocuments(data.recentDocuments || []);
+        setNotifications(data.notifications || []);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Dashboard API error:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch dashboard:', error);
+    }
+  };
+
+  const handleDownloadPdf = async (docId, action = 'download') => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${apiUrl}/api/staff/document/${docId}/download?action=${action}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Download error:', error);
+        alert(error.message || 'Failed to download PDF');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      if (action === 'view') {
+        window.open(url, '_blank');
+      } else {
+        // Parse filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'document.pdf';
+        
+        if (contentDisposition) {
+          // Extract filename from: filename="Name (PEN XXXXX).pdf"
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1];
+          }
+        }
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download PDF');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-md p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-blue-600">Staff Dashboard</h1>
+      <nav className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-white">Staff Dashboard</h1>
         <div className="flex items-center gap-4">
-          <span className="text-gray-700">Welcome, {userName}</span>
-          <button onClick={onLogout} className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+          <span className="text-white font-medium">Welcome, {userName}</span>
+          <button onClick={onLogout} className="bg-white text-blue-700 px-4 py-2 rounded-lg hover:bg-gray-100 font-semibold transition-colors">
             Logout
           </button>
         </div>
@@ -3218,36 +3644,44 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
       
       <div className="flex">
         {/* Sidebar */}
-        <div className="w-64 bg-white shadow-md min-h-screen p-4">
+        <div className="w-64 bg-gradient-to-b from-gray-800 to-gray-900 shadow-lg min-h-screen p-4">
           <div className="space-y-2">
             <button
               onClick={() => setCurrentTab('dashboard')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'dashboard' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'dashboard' 
+                  ? 'bg-blue-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               📊 Dashboard
             </button>
             <button
               onClick={() => setCurrentTab('generate')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'generate' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'generate' 
+                  ? 'bg-blue-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               ✏️ Generate Documents
             </button>
             <button
               onClick={() => setCurrentTab('my-documents')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'my-documents' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'my-documents' 
+                  ? 'bg-blue-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               📄 My Documents
             </button>
             <button
               onClick={() => setCurrentTab('settings')}
-              className={`w-full text-left px-4 py-2 rounded ${
-                currentTab === 'settings' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'settings' 
+                  ? 'bg-blue-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               ⚙️ My Settings
@@ -3263,11 +3697,11 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h3 className="text-gray-600 mb-2">My Documents</h3>
-                  <p className="text-3xl font-bold text-blue-600">0</p>
+                  <p className="text-3xl font-bold text-blue-600">{stats?.total_documents || 0}</p>
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h3 className="text-gray-600 mb-2">Pending</h3>
-                  <p className="text-3xl font-bold text-yellow-600">0</p>
+                  <p className="text-3xl font-bold text-yellow-600">{stats?.pending_documents || 0}</p>
                 </div>
               </div>
               <div className="bg-white p-6 rounded-lg shadow">
@@ -3295,9 +3729,66 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
             <div className="p-8">
               <h2 className="text-2xl font-bold mb-4">My Documents</h2>
               <div className="bg-white p-6 rounded-lg shadow">
-                <p className="text-gray-600">Your generated documents will appear here.</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Note: You can only view Indicative PDFs. Combined PDFs are sent to Super Admin.
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4">Pension #</th>
+                      <th className="text-left py-3 px-4">Client Name</th>
+                      <th className="text-left py-3 px-4">Status</th>
+                      <th className="text-left py-3 px-4">Date</th>
+                      <th className="text-center py-3 px-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myDocuments.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="text-center py-6 text-gray-500">
+                          No documents yet. Click "Generate Documents" to start!
+                        </td>
+                      </tr>
+                    ) : (
+                      myDocuments.map((doc) => (
+                        <tr key={doc.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4">{doc.client_pension_no || doc.policy_number}</td>
+                          <td className="py-3 px-4">{doc.client_name}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              doc.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              doc.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              doc.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {doc.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">{new Date(doc.generated_at).toLocaleDateString()}</td>
+                          <td className="py-3 px-4">
+                            {doc.indicative_pdf_path ? (
+                              <div className="flex gap-2 justify-center">
+                                <button 
+                                  onClick={() => handleDownloadPdf(doc.id, 'view')}
+                                  className="px-3 py-1 border border-green-500 text-green-600 rounded hover:bg-green-500 hover:text-white transition-colors text-sm font-medium"
+                                >
+                                  👁️ View PDF
+                                </button>
+                                <button 
+                                  onClick={() => handleDownloadPdf(doc.id, 'download')}
+                                  className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-500 hover:text-white transition-colors text-sm font-medium"
+                                >
+                                  📥 Download PDF
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">N/A</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+                <p className="text-sm text-gray-500 mt-4">
+                  Note: You can only view Indicative PDFs. Combined PDFs are available to Super Admin only.
                 </p>
               </div>
             </div>
