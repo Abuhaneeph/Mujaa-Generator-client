@@ -762,6 +762,9 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       // Refresh policy number after successful generation
       getCurrentPolicyNumber();
       
+      // Refresh iLovePDF credits to reflect usage
+      refreshIlpCredits();
+      
     } catch (error) {
       console.error(`[Tab ${tabId.slice(-4)}] Download failed:`, error);
       showStatus(`Download failed: ${error.message}`, 'error');
@@ -1353,6 +1356,9 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       // Refresh policy number after successful generation
       getCurrentPolicyNumber();
       
+      // Refresh iLovePDF credits to reflect usage
+      refreshIlpCredits();
+      
     } catch (error) {
       console.error('Custom order download failed:', error);
       
@@ -1404,6 +1410,9 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
         
         // Refresh policy number after successful generation
         getCurrentPolicyNumber();
+        
+        // Refresh iLovePDF credits to reflect usage
+        refreshIlpCredits();
         
       } catch (fallbackError) {
         console.error('Fallback generation also failed:', fallbackError);
