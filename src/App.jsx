@@ -183,6 +183,7 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
 
   const [status, setStatus] = useState({ message: '', type: '', visible: false });
   const [isLoading, setIsLoading] = useState(false);
+  const [isBackgroundProcessing, setIsBackgroundProcessing] = useState(false);
   const [showPensionModal, setShowPensionModal] = useState(false);
   const [showMortgageModal, setShowMortgageModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -616,36 +617,6 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
     }
   };
 
-  const debugGenerate = async () => {
-    try {
-      setIsLoading(true);
-      showStatus('Running debug generation...', 'info');
-      
-      const response = await fetch(`${apiUrl}/api/debug-generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        let message = `Debug Generation Successful<br/>`;
-        message += `Buffer Size: ${data.bufferSize} bytes<br/>`;
-        message += `Output File: ${data.outputPath}<br/>`;
-        message += `Check your server directory for debug_output.docx`;
-        
-        showStatus(message, 'success');
-      } else {
-        showStatus(`Debug Failed: ${data.error || 'Unknown error'}`, 'error');
-      }
-    } catch (error) {
-      showStatus(`Debug Error: ${error.message}`, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const validateForm = () => {
     const requiredFields = [
@@ -764,6 +735,11 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       
       // Refresh iLovePDF credits to reflect usage
       refreshIlpCredits();
+      
+      // Refresh staff dashboard data to show new document
+      if (window.refreshStaffDashboard) {
+        window.refreshStaffDashboard();
+      }
       
     } catch (error) {
       console.error(`[Tab ${tabId.slice(-4)}] Download failed:`, error);
@@ -1315,7 +1291,7 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       }
 
       const blob = await response.blob();
-      console.log(`[Tab ${tabId.slice(-4)}] Received custom order PDF blob:`, blob.size, 'bytes');
+        console.log(`[Tab ${tabId.slice(-4)}] Received custom order PDF blob:`, blob.size, 'bytes');
       
       if (blob.size === 0) {
         throw new Error('Received empty PDF file');
@@ -1359,65 +1335,29 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       // Refresh iLovePDF credits to reflect usage
       refreshIlpCredits();
       
+      // For staff users, show background processing state
+      if (isStaff) {
+        setIsBackgroundProcessing(true);
+        showStatus(`✅ Indicative PDF downloaded!<br/>🔄 Background processing: Merging and uploading combined PDF...<br/>📄 Document will appear in "My Documents" when complete.`, 'info');
+        
+        // Set a timeout to clear background processing state (background job typically takes 30-60 seconds)
+        setTimeout(() => {
+          setIsBackgroundProcessing(false);
+          showStatus(`✅ Background processing complete!<br/>📄 Check "My Documents" to see your new document.`, 'success');
+          
+          // Refresh dashboard data after background processing completes
+          if (window.refreshStaffDashboard) {
+            window.refreshStaffDashboard();
+          }
+        }, 60000); // 60 seconds timeout
+      }
+      
     } catch (error) {
       console.error('Custom order download failed:', error);
       
-      // If custom order fails, try regular document generation as fallback
-      showStatus(`Custom order failed, trying regular generation...`, 'info');
-      
-      try {
-        const token = localStorage.getItem('token');
-        
-        const response = await fetch(`${apiUrl}/api/generate-documents`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(formData)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to generate documents');
-        }
-
-        const blob = await response.blob();
-        console.log('Received fallback PDF blob:', blob.size, 'bytes');
-        
-        // Format name for filename: ADAMU MUAAZU (PEN 32434344).pdf
-        const formattedName = formData.name.toUpperCase();
-        const filename = `${formattedName} (PEN ${formData.pensionNo}).pdf`;
-
-        // Create download link
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        
-        // Trigger download
-        document.body.appendChild(link);
-        link.click();
-        
-        // Cleanup
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        showStatus(`Fallback documents downloaded successfully!<br/>File size: ${(blob.size / 1024).toFixed(2)} KB`, 'success');
-        
-        // Clear form fields after successful generation
-        clearFormFields();
-        
-        // Refresh policy number after successful generation
-        getCurrentPolicyNumber();
-        
-        // Refresh iLovePDF credits to reflect usage
-        refreshIlpCredits();
-        
-      } catch (fallbackError) {
-        console.error('Fallback generation also failed:', fallbackError);
-        showStatus(`Both custom order and fallback generation failed: ${error.message}`, 'error');
-      }
+      // Show error message instead of automatic fallback to prevent multiple concurrent requests
+      showStatus(`❌ Custom order generation failed: ${error.message}`, 'error');
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -1444,14 +1384,6 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                 <FileText className="w-8 h-8 text-white" />
               </div>
               </div>
-              <button
-                onClick={onLogout}
-                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-all duration-200"
-                title="Logout"
-              >
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Document Generator</h1>
             <p className="text-gray-600">Generate pension documents with ease</p>
@@ -1778,15 +1710,6 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                 Check Server Status
               </button>
               
-              <button
-                type="button"
-                onClick={debugGenerate}
-                disabled={isLoading}
-                className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <AlertCircle className="w-5 h-5" />}
-                Test Debug
-              </button>
               
               <button
                 type="button"
@@ -1802,15 +1725,17 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                 Custom Order
               </button>
               
-              <button
-                type="submit"
-                disabled={isLoading}
-                onClick={generateDocuments}
-                className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
-                Generate Documents
-              </button>
+              {!isStaff && (
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  onClick={generateDocuments}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+                  Generate Documents
+                </button>
+              )}
             </div>
           </div>
           
@@ -2471,14 +2396,19 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                     console.log('isLoading state:', isLoading);
                     generateCustomOrderDocuments();
                   }}
-                  disabled={isLoading}
+                  disabled={isLoading || isBackgroundProcessing}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  title={isLoading ? "Generating and uploading documents..." : "Generate documents with custom order"}
+                  title={isLoading ? "Generating and downloading documents..." : isBackgroundProcessing ? "Background processing: Merging and uploading..." : "Generate documents with custom order"}
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Generating & Uploading...
+                      Generating & Downloading...
+                    </>
+                  ) : isBackgroundProcessing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Background Processing...
                     </>
                   ) : (
                     <>
@@ -3160,18 +3090,41 @@ const UserSettingsInline = () => {
 // All Documents View Component for Admin
 const AllDocumentsView = () => {
   const [documents, setDocuments] = useState([]);
+  const [allDocuments, setAllDocuments] = useState([]); // Store all documents for client-side filtering
   const [filter, setFilter] = useState('all');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [selectedDocuments, setSelectedDocuments] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
   useEffect(() => {
     fetchDocuments();
   }, [filter]);
+
+  // Client-side filtering based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setDocuments(allDocuments);
+    } else {
+      const filtered = allDocuments.filter(doc => {
+        const search = searchTerm.toLowerCase();
+        const clientName = (doc.client_name || '').toLowerCase();
+        const pensionNo = (doc.client_pension_no || '').toLowerCase();
+        const policyNo = (doc.policy_number || '').toLowerCase();
+        const documentRef = (doc.document_ref || '').toLowerCase();
+        
+        return clientName.includes(search) || 
+               pensionNo.includes(search) || 
+               policyNo.includes(search) || 
+               documentRef.includes(search);
+      });
+      setDocuments(filtered);
+    }
+  }, [searchTerm, allDocuments]);
 
   const fetchDocuments = async () => {
     const token = localStorage.getItem('token');
@@ -3186,6 +3139,7 @@ const AllDocumentsView = () => {
       
       if (response.ok) {
         const data = await response.json();
+        setAllDocuments(data.documents || []);
         setDocuments(data.documents || []);
         if (data.documents && data.documents.length === 0) {
           setMessage({ type: 'info', text: 'No documents found. Documents will appear here when staff generate them.' });
@@ -3358,6 +3312,17 @@ const AllDocumentsView = () => {
           {message.text}
         </div>
       )}
+
+      {/* Search Bar */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="🔍 Search by client name, pension number, policy number..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-600 text-sm"
+        />
+      </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="w-full">
@@ -3541,15 +3506,60 @@ const AllDocumentsView = () => {
 const StaffDashboardSimple = ({ onLogout, userName }) => {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [myDocuments, setMyDocuments] = useState([]);
+  const [allDocuments, setAllDocuments] = useState([]); // Store all documents for client-side filtering
   const [stats, setStats] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   
   // API URL configuration
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Expose refresh function globally for document generation callbacks
+    window.refreshStaffDashboard = fetchDashboardData;
+    
+    // Cleanup on unmount
+    return () => {
+      delete window.refreshStaffDashboard;
+    };
   }, []);
+
+  // Reset to first page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Client-side filtering and pagination
+  useEffect(() => {
+    let filtered = allDocuments;
+    
+    // Apply search filter
+    if (searchTerm.trim() !== '') {
+      filtered = allDocuments.filter(doc => {
+        const search = searchTerm.toLowerCase();
+        const clientName = (doc.client_name || '').toLowerCase();
+        const pensionNo = (doc.client_pension_no || '').toLowerCase();
+        const policyNo = (doc.policy_number || '').toLowerCase();
+        const documentRef = (doc.document_ref || '').toLowerCase();
+        
+        return clientName.includes(search) || 
+               pensionNo.includes(search) || 
+               policyNo.includes(search) || 
+               documentRef.includes(search);
+      });
+    }
+    
+    // Apply pagination
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginated = filtered.slice(startIndex, endIndex);
+    
+    setMyDocuments(paginated);
+  }, [searchTerm, allDocuments, currentPage, itemsPerPage]);
 
   const fetchDashboardData = async () => {
     try {
@@ -3566,10 +3576,10 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Loaded staff dashboard data:', data);
-        console.log('📄 Recent documents count:', data.recentDocuments?.length || 0);
+        console.log('✅ Loaded staff dashboard data for user');
         
         setStats(data.stats);
+        setAllDocuments(data.recentDocuments || []);
         setMyDocuments(data.recentDocuments || []);
         setNotifications(data.notifications || []);
       } else {
@@ -3728,6 +3738,18 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
           {currentTab === 'my-documents' && (
             <div className="p-8">
               <h2 className="text-2xl font-bold mb-4">My Documents</h2>
+              
+              {/* Search Bar */}
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="🔍 Search by client name, pension number, policy number..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-600 text-sm"
+                />
+              </div>
+              
               <div className="bg-white p-6 rounded-lg shadow">
                 <table className="min-w-full">
                   <thead>
@@ -3790,6 +3812,53 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
                 <p className="text-sm text-gray-500 mt-4">
                   Note: You can only view Indicative PDFs. Combined PDFs are available to Super Admin only.
                 </p>
+                
+                {/* Pagination Controls */}
+                {(() => {
+                  let filtered = allDocuments;
+                  if (searchTerm.trim() !== '') {
+                    filtered = allDocuments.filter(doc => {
+                      const search = searchTerm.toLowerCase();
+                      const clientName = (doc.client_name || '').toLowerCase();
+                      const pensionNo = (doc.client_pension_no || '').toLowerCase();
+                      const policyNo = (doc.policy_number || '').toLowerCase();
+                      const documentRef = (doc.document_ref || '').toLowerCase();
+                      return clientName.includes(search) || pensionNo.includes(search) || policyNo.includes(search) || documentRef.includes(search);
+                    });
+                  }
+                  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                  const startItem = (currentPage - 1) * itemsPerPage + 1;
+                  const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
+                  
+                  if (totalPages <= 1) return null;
+                  
+                  return (
+                    <div className="mt-6 flex items-center justify-between">
+                      <div className="text-sm text-gray-600">
+                        Showing {startItem} to {endItem} of {filtered.length} documents
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Previous
+                        </button>
+                        <span className="px-4 py-2 text-sm font-medium">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

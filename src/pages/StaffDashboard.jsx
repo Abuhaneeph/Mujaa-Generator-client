@@ -7,8 +7,10 @@ import './Dashboard.css';
 export default function StaffDashboard() {
   const [stats, setStats] = useState(null);
   const [myDocuments, setMyDocuments] = useState([]);
+  const [allDocuments, setAllDocuments] = useState([]); // Store all documents for client-side filtering
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const { token, logout, user } = useAuth();
   const navigate = useNavigate();
 
@@ -17,6 +19,27 @@ export default function StaffDashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Client-side filtering based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setMyDocuments(allDocuments);
+    } else {
+      const filtered = allDocuments.filter(doc => {
+        const search = searchTerm.toLowerCase();
+        const clientName = (doc.client_name || '').toLowerCase();
+        const pensionNo = (doc.client_pension_no || '').toLowerCase();
+        const policyNo = (doc.policy_number || '').toLowerCase();
+        const documentRef = (doc.document_ref || '').toLowerCase();
+        
+        return clientName.includes(search) || 
+               pensionNo.includes(search) || 
+               policyNo.includes(search) || 
+               documentRef.includes(search);
+      });
+      setMyDocuments(filtered);
+    }
+  }, [searchTerm, allDocuments]);
 
   const fetchDashboardData = async () => {
     try {
@@ -29,6 +52,7 @@ export default function StaffDashboard() {
       if (response.ok) {
         const data = await response.json();
         setStats(data.stats);
+        setAllDocuments(data.recentDocuments || []);
         setMyDocuments(data.recentDocuments || []);
         setNotifications(data.notifications || []);
       }
@@ -145,6 +169,25 @@ export default function StaffDashboard() {
 
           <div className="section">
             <h2>Recent Documents</h2>
+            
+            {/* Search Bar */}
+            <div style={{ marginBottom: '1rem' }}>
+              <input
+                type="text"
+                placeholder="🔍 Search by client name, pension number, policy number..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 15px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  fontSize: '0.95rem',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            
             <div className="table-container">
               <table>
                 <thead>

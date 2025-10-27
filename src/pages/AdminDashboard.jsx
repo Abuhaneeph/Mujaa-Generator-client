@@ -7,11 +7,13 @@ import './Dashboard.css';
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [recentDocuments, setRecentDocuments] = useState([]);
+  const [allDocuments, setAllDocuments] = useState([]); // Store all documents for client-side filtering
   const [loading, setLoading] = useState(true);
   const [selectedDocuments, setSelectedDocuments] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const { token, logout, user } = useAuth();
   const navigate = useNavigate();
 
@@ -20,6 +22,27 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Client-side filtering based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setRecentDocuments(allDocuments);
+    } else {
+      const filtered = allDocuments.filter(doc => {
+        const search = searchTerm.toLowerCase();
+        const clientName = (doc.client_name || '').toLowerCase();
+        const pensionNo = (doc.client_pension_no || '').toLowerCase();
+        const policyNo = (doc.policy_number || '').toLowerCase();
+        const documentRef = (doc.document_ref || '').toLowerCase();
+        
+        return clientName.includes(search) || 
+               pensionNo.includes(search) || 
+               policyNo.includes(search) || 
+               documentRef.includes(search);
+      });
+      setRecentDocuments(filtered);
+    }
+  }, [searchTerm, allDocuments]);
 
   const fetchDashboardData = async () => {
     try {
@@ -32,6 +55,7 @@ export default function AdminDashboard() {
       if (response.ok) {
         const data = await response.json();
         setStats(data.stats);
+        setAllDocuments(data.recentDocuments || []);
         setRecentDocuments(data.recentDocuments || []);
       }
     } catch (error) {
@@ -261,6 +285,25 @@ export default function AdminDashboard() {
                 </button>
               )}
             </div>
+            
+            {/* Search Bar */}
+            <div style={{ marginBottom: '1rem' }}>
+              <input
+                type="text"
+                placeholder="🔍 Search by client name, pension number, policy number..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 15px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  fontSize: '0.95rem',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            
             <div className="table-container">
               <table>
                 <thead>
