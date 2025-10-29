@@ -14,6 +14,8 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const { token, logout, user } = useAuth();
   const navigate = useNavigate();
 
@@ -23,12 +25,18 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
-  // Client-side filtering based on search term
+  // Reset to first page when search term changes
   useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setRecentDocuments(allDocuments);
-    } else {
-      const filtered = allDocuments.filter(doc => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Client-side filtering and pagination
+  useEffect(() => {
+    let filtered = allDocuments;
+    
+    // Apply search filter
+    if (searchTerm.trim() !== '') {
+      filtered = allDocuments.filter(doc => {
         const search = searchTerm.toLowerCase();
         const clientName = (doc.client_name || '').toLowerCase();
         const pensionNo = (doc.client_pension_no || '').toLowerCase();
@@ -40,9 +48,15 @@ export default function AdminDashboard() {
                policyNo.includes(search) || 
                documentRef.includes(search);
       });
-      setRecentDocuments(filtered);
     }
-  }, [searchTerm, allDocuments]);
+    
+    // Apply pagination
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginated = filtered.slice(startIndex, endIndex);
+    
+    setRecentDocuments(paginated);
+  }, [searchTerm, allDocuments, currentPage, itemsPerPage]);
 
   const fetchDashboardData = async () => {
     try {
@@ -56,7 +70,7 @@ export default function AdminDashboard() {
         const data = await response.json();
         setStats(data.stats);
         setAllDocuments(data.recentDocuments || []);
-        setRecentDocuments(data.recentDocuments || []);
+        // Don't set recentDocuments here - let the useEffect handle pagination
       }
     } catch (error) {
       console.error('Failed to fetch dashboard:', error);
@@ -265,7 +279,14 @@ export default function AdminDashboard() {
           </div>
 
           <div className="section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: '1rem',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
               <h2>Recent Documents</h2>
               {selectedDocuments.length > 0 && (
                 <button
@@ -278,7 +299,8 @@ export default function AdminDashboard() {
                     border: 'none',
                     cursor: 'pointer',
                     fontWeight: '500',
-                    fontSize: '0.875rem'
+                    fontSize: '0.875rem',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   🗑️ Delete Selected ({selectedDocuments.length})
@@ -350,7 +372,13 @@ export default function AdminDashboard() {
                         <td>{doc.generated_by_name}</td>
                         <td>{new Date(doc.generated_at).toLocaleDateString()}</td>
                         <td>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <div style={{ 
+                            display: 'flex', 
+                            gap: '8px', 
+                            justifyContent: 'center', 
+                            flexWrap: 'wrap',
+                            alignItems: 'center'
+                          }}>
                             {doc.cpanel_pdf_url ? (
                               <>
                                 <button 
@@ -360,13 +388,14 @@ export default function AdminDashboard() {
                                   style={{
                                     color: '#10b981',
                                     fontWeight: '500',
-                                    fontSize: '0.875rem',
+                                    fontSize: '0.75rem',
                                     padding: '4px 8px',
                                     borderRadius: '4px',
                                     border: '1px solid #10b981',
                                     cursor: 'pointer',
                                     backgroundColor: 'transparent',
-                                    transition: 'all 0.2s'
+                                    transition: 'all 0.2s',
+                                    whiteSpace: 'nowrap'
                                   }}
                                   onMouseOver={(e) => {
                                     e.target.style.backgroundColor = '#10b981';
@@ -386,13 +415,14 @@ export default function AdminDashboard() {
                                   style={{
                                     color: '#3b82f6',
                                     fontWeight: '500',
-                                    fontSize: '0.875rem',
+                                    fontSize: '0.75rem',
                                     padding: '4px 8px',
                                     borderRadius: '4px',
                                     border: '1px solid #3b82f6',
                                     cursor: 'pointer',
                                     backgroundColor: 'transparent',
-                                    transition: 'all 0.2s'
+                                    transition: 'all 0.2s',
+                                    whiteSpace: 'nowrap'
                                   }}
                                   onMouseOver={(e) => {
                                     e.target.style.backgroundColor = '#3b82f6';
@@ -418,13 +448,14 @@ export default function AdminDashboard() {
                               style={{
                                 color: '#ef4444',
                                 fontWeight: '500',
-                                fontSize: '0.875rem',
+                                fontSize: '0.75rem',
                                 padding: '4px 8px',
                                 borderRadius: '4px',
                                 border: '1px solid #ef4444',
                                 cursor: 'pointer',
                                 backgroundColor: 'transparent',
-                                transition: 'all 0.2s'
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
                               }}
                               onMouseOver={(e) => {
                                 e.target.style.backgroundColor = '#ef4444';
@@ -444,6 +475,115 @@ export default function AdminDashboard() {
                   )}
                 </tbody>
               </table>
+              
+              {/* Pagination Controls */}
+              {(() => {
+                let filtered = allDocuments;
+                if (searchTerm.trim() !== '') {
+                  filtered = allDocuments.filter(doc => {
+                    const search = searchTerm.toLowerCase();
+                    const clientName = (doc.client_name || '').toLowerCase();
+                    const pensionNo = (doc.client_pension_no || '').toLowerCase();
+                    const policyNo = (doc.policy_number || '').toLowerCase();
+                    const documentRef = (doc.document_ref || '').toLowerCase();
+                    return clientName.includes(search) || pensionNo.includes(search) || policyNo.includes(search) || documentRef.includes(search);
+                  });
+                }
+                const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                const startItem = (currentPage - 1) * itemsPerPage + 1;
+                const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
+                
+                if (totalPages <= 1) return null;
+                
+                return (
+                  <div style={{ 
+                    marginTop: '1.5rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    flexWrap: 'wrap', 
+                    gap: '1rem'
+                  }}>
+                    <div style={{ 
+                      fontSize: '0.875rem', 
+                      color: '#666',
+                      flex: '1 1 auto',
+                      minWidth: '200px'
+                    }}>
+                      Showing {startItem} to {endItem} of {filtered.length} documents
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '0.5rem', 
+                      alignItems: 'center',
+                      flexWrap: 'wrap'
+                    }}>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '8px 12px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          opacity: currentPage === 1 ? 0.5 : 1,
+                          transition: 'all 0.2s',
+                          fontSize: '0.875rem',
+                          whiteSpace: 'nowrap'
+                        }}
+                        onMouseOver={(e) => {
+                          if (currentPage !== 1) {
+                            e.target.style.backgroundColor = '#f9fafb';
+                          }
+                        }}
+                        onMouseOut={(e) => {
+                          if (currentPage !== 1) {
+                            e.target.style.backgroundColor = 'white';
+                          }
+                        }}
+                      >
+                        Previous
+                      </button>
+                      <span style={{ 
+                        padding: '8px 8px', 
+                        fontSize: '0.875rem', 
+                        fontWeight: '500',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: '8px 12px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                          opacity: currentPage === totalPages ? 0.5 : 1,
+                          transition: 'all 0.2s',
+                          fontSize: '0.875rem',
+                          whiteSpace: 'nowrap'
+                        }}
+                        onMouseOver={(e) => {
+                          if (currentPage !== totalPages) {
+                            e.target.style.backgroundColor = '#f9fafb';
+                          }
+                        }}
+                        onMouseOut={(e) => {
+                          if (currentPage !== totalPages) {
+                            e.target.style.backgroundColor = 'white';
+                          }
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -466,7 +606,10 @@ export default function AdminDashboard() {
                 padding: '2rem',
                 borderRadius: '8px',
                 maxWidth: '400px',
-                width: '90%'
+                width: '90%',
+                maxHeight: '90vh',
+                overflow: 'auto',
+                margin: '20px'
               }}>
                 <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 'bold' }}>
                   Confirm Delete
@@ -496,7 +639,12 @@ export default function AdminDashboard() {
                       Are you sure you want to delete {deleteTarget?.length} document(s)? 
                       This will also remove the file(s) from Cloudinary. This action cannot be undone.
                     </p>
-                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '1rem', 
+                      justifyContent: 'flex-end',
+                      flexWrap: 'wrap'
+                    }}>
                       <button
                         onClick={() => {
                           setShowDeleteConfirm(false);

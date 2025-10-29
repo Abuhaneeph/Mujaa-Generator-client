@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, FileText, CheckCircle, AlertCircle, Loader2, X, Building2, Upload, ArrowUpDown, Settings, RefreshCw, Eye, EyeOff, Scissors, Grid3X3, List, RotateCcw, Trash2, Copy, Move, GripVertical, ZoomIn, ZoomOut, Maximize2, Download, Lock, User, LogOut } from 'lucide-react';
+import UserSettings from './components/UserSettings';
 
 // Login Component
 const LoginPage = ({ onLogin }) => {
@@ -373,21 +374,41 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       
       console.log('🔑 Loading iLovePDF credits with token...');
       
-      // Use authenticated endpoint /api/ilp/my-config (same as Settings)
-      const cfgRes = await fetch(`${apiUrl}/api/ilp/my-config`, {
+      // Use multi-key API to get primary key
+      const keysRes = await fetch(`${apiUrl}/api/ilp/keys`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
+      if (keysRes.ok) {
+        const keysData = await keysRes.json();
+        const keys = keysData.keys || [];
+        
+        // Find the primary key (highest priority)
+        const primaryKey = keys.length > 0 ? keys.reduce((prev, curr) => 
+          (curr.priority || 0) > (prev.priority || 0) ? curr : prev
+        ) : null;
+        
+        if (primaryKey) {
+          setIlpPublicKey(primaryKey.publicKey || '');
+          const credits = primaryKey.lastKnownCredits || 0;
+          setIlpCredits(credits);
+          console.log('💳 DocumentGenerator loaded primary key:', primaryKey.publicKey.substring(0, 20) + '...', 'Credits:', credits);
+        } else {
+          // Fallback to single-key endpoint
+          const cfgRes = await fetch(`${apiUrl}/api/ilp/my-config`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
       if (cfgRes.ok) {
         const cfg = await cfgRes.json();
         setIlpPublicKey(cfg.publicKey || '');
-        // Credits are in the response!
         const credits = cfg.credits || 0;
         setIlpCredits(credits);
-        console.log('💳 DocumentGenerator loaded LIVE credits from /my-config:', credits);
+            console.log('💳 DocumentGenerator loaded from single-key endpoint:', credits);
+          }
+        }
       } else {
-        const errorText = await cfgRes.text();
-        console.error('❌ Failed to load credits, status:', cfgRes.status, errorText);
+        const errorText = await keysRes.text();
+        console.error('❌ Failed to load keys, status:', keysRes.status, errorText);
         setIlpCredits(0);
       }
     } catch (e) {
@@ -447,8 +468,29 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       
       const token = localStorage.getItem('token');
       
-      // Use authenticated endpoint /api/ilp/refresh-credits (same as Settings)
-      const res = await fetch(`${apiUrl}/api/ilp/refresh-credits`, {
+      // First get all keys to find primary key
+      const keysRes = await fetch(`${apiUrl}/api/ilp/keys`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!keysRes.ok) {
+        throw new Error('Failed to load keys');
+      }
+      
+      const keysData = await keysRes.json();
+      const keys = keysData.keys || [];
+      
+      // Find primary key (highest priority)
+      const primaryKey = keys.length > 0 ? keys.reduce((prev, curr) => 
+        (curr.priority || 0) > (prev.priority || 0) ? curr : prev
+      ) : null;
+      
+      if (!primaryKey) {
+        throw new Error('No primary key found');
+      }
+      
+      // Refresh credits for primary key
+      const res = await fetch(`${apiUrl}/api/ilp/keys/${primaryKey.id}/refresh`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -461,7 +503,8 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       
       const credits = data.credits || 0;
       setIlpCredits(credits);
-      console.log('💳 DocumentGenerator refreshed LIVE credits from /refresh-credits:', credits);
+      setIlpPublicKey(primaryKey.publicKey);
+      console.log('💳 DocumentGenerator refreshed LIVE credits from primary key:', credits);
       showStatus(`Credits: ${credits}`, 'success');
       setTimeout(() => setStatus(prev => ({ ...prev, visible: false })), 2000);
     } catch (e) {
@@ -1478,8 +1521,8 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                 </button>
               </div>
             </div>
-            {/* First Row */}
-
+            {/* First Row - Name and CV */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-8">
     <label className="block text-sm font-semibold text-gray-700 mb-2">
       Name
@@ -1495,7 +1538,8 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       required
     />
   </div>
-          <div>
+              
+              <div className="md:col-span-4">
   <label className="block text-sm font-semibold text-gray-700 mb-2">
     CV (₦)
   </label>
@@ -1532,27 +1576,14 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                transition-all duration-200 text-lg"
     required
   />
+              </div>
 </div>
 
 
 
-            {/* Second Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Date of Birth
-                </label>
-                <input
-                  type="date"
-                  name="dob"
-                  value={formData.dob}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-all duration-200"
-                  required
-                />
-              </div>
-              
-              <div>
+            {/* Second Row - Account Number, Date of Birth, and Pension Number (3 in a row) */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              <div className="md:col-span-3">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Account Number
                 </label>
@@ -1565,12 +1596,22 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                   required
                 />
               </div>
+              
+              <div className="md:col-span-3">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Date of Birth
+                </label>
+                <input
+                  type="date"
+                  name="dob"
+                  value={formData.dob}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-all duration-200"
+                  required
+                />
             </div>
 
-            {/* Third Row */}
-            {/* Third Row */}
-<div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-  <div className="md:col-span-4">
+              <div className="md:col-span-6">
     <label className="block text-sm font-semibold text-gray-700 mb-2">
       Pension Number
     </label>
@@ -1583,9 +1624,11 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                  focus:border-purple-500 focus:outline-none transition-all duration-200"
       required
     />
+              </div>
   </div>
 
-  <div className="md:col-span-8">
+            {/* Third Row - Residential Address (full width) */}
+            <div>
     <label className="block text-sm font-semibold text-gray-700 mb-2">
       Residential Address
     </label>
@@ -1599,7 +1642,6 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                  focus:border-purple-500 focus:outline-none transition-all duration-200"
       required
     />
-  </div>
 </div>
 
 
@@ -2666,59 +2708,112 @@ const UserManagementInline = () => {
       )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium">Username</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Full Name</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Email</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Role</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
-                  No users yet. Click "Create Staff" to add staff members.
-                </td>
-              </tr>
-            ) : (
-              users.map((user) => (
-                <tr key={user.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{user.username}</td>
-                  <td className="px-4 py-3">{user.full_name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-xs rounded ${
-                      user.role === 'super_admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {user.role === 'super_admin' ? 'Admin' : 'Staff'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-xs rounded ${
-                      user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {user.role !== 'super_admin' && (
+        {/* Mobile Card View */}
+        <div className="md:hidden">
+          {users.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              No users yet. Click "Create Staff" to add staff members.
+            </div>
+          ) : (
+            <div className="divide-y">
+              {users.map((user) => (
+                <div key={user.id} className="p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 mb-1">{user.full_name || user.username}</div>
+                      <div className="text-sm text-gray-500">@{user.username}</div>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <span className={`px-2 py-1 text-xs rounded ${
+                        user.role === 'super_admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {user.role === 'super_admin' ? 'Admin' : 'Staff'}
+                      </span>
+                      <span className={`px-2 py-1 text-xs rounded ${
+                        user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <span className="text-xs font-medium text-gray-500 w-16">Email:</span>
+                      <span className="text-sm text-gray-700 flex-1 break-words">{user.email}</span>
+                    </div>
+                  </div>
+                  {user.role !== 'super_admin' && (
+                    <div className="mt-3 pt-3 border-t">
                       <button
                         onClick={() => handleDeleteUser(user.id, user.username)}
-                        className="text-red-600 hover:text-red-800 text-sm"
+                        className="text-red-600 hover:text-red-800 text-sm font-medium"
                       >
-                        Delete
+                        Delete User
                       </button>
-                    )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-medium">Username</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Full Name</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Email</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Role</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                    No users yet. Click "Create Staff" to add staff members.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                users.map((user) => (
+                  <tr key={user.id} className="border-t hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium">{user.username}</td>
+                    <td className="px-4 py-3">{user.full_name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 text-xs rounded ${
+                        user.role === 'super_admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {user.role === 'super_admin' ? 'Admin' : 'Staff'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 text-xs rounded ${
+                        user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.role !== 'super_admin' && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id, user.username)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -2727,6 +2822,7 @@ const UserManagementInline = () => {
 // Import dashboard components (create simple placeholders if files don't exist)
 const AdminDashboardSimple = ({ onLogout, userName }) => {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [dashboardStats, setDashboardStats] = useState({
     total_documents: 0,
     pending_documents: 0,
@@ -2769,21 +2865,49 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
   return (
     <div className="min-h-screen bg-gray-100">
       <nav className="bg-gradient-to-r from-purple-600 to-indigo-700 shadow-lg p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">Super Admin Dashboard</h1>
         <div className="flex items-center gap-4">
-          <span className="text-white font-medium">Welcome, {userName}</span>
-          <button onClick={onLogout} className="bg-white text-purple-700 px-4 py-2 rounded-lg hover:bg-gray-100 font-semibold transition-colors">
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="md:hidden text-white p-2 hover:bg-purple-700 rounded-lg transition-colors"
+            aria-label="Toggle sidebar"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {isSidebarOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Super Admin Dashboard</h1>
+        </div>
+        <div className="flex items-center gap-2 md:gap-4">
+          <span className="text-white font-medium text-sm md:text-base hidden sm:inline">Welcome, {userName}</span>
+          <button onClick={onLogout} className="bg-white text-purple-700 px-3 md:px-4 py-2 rounded-lg hover:bg-gray-100 font-semibold transition-colors text-sm md:text-base">
             Logout
           </button>
         </div>
       </nav>
       
-      <div className="flex">
+      {/* Mobile backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+      
+      <div className="flex relative">
         {/* Sidebar */}
-        <div className="w-64 bg-gradient-to-b from-gray-800 to-gray-900 shadow-lg min-h-screen p-4">
+        <div className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-gray-800 to-gray-900 shadow-lg min-h-screen p-4 transform transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}>
           <div className="space-y-2">
             <button
-              onClick={() => setCurrentTab('dashboard')}
+              onClick={() => {
+                setCurrentTab('dashboard');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'dashboard' 
                   ? 'bg-purple-600 text-white shadow-md' 
@@ -2793,7 +2917,10 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
               📊 Dashboard
             </button>
             <button
-              onClick={() => setCurrentTab('users')}
+              onClick={() => {
+                setCurrentTab('users');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'users' 
                   ? 'bg-purple-600 text-white shadow-md' 
@@ -2803,7 +2930,10 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
               👥 Manage Users
             </button>
             <button
-              onClick={() => setCurrentTab('documents')}
+              onClick={() => {
+                setCurrentTab('documents');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'documents' 
                   ? 'bg-purple-600 text-white shadow-md' 
@@ -2813,7 +2943,10 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
               📄 All Documents
             </button>
             <button
-              onClick={() => setCurrentTab('generate')}
+              onClick={() => {
+                setCurrentTab('generate');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'generate' 
                   ? 'bg-purple-600 text-white shadow-md' 
@@ -2823,7 +2956,10 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
               ✏️ Generate Documents
             </button>
             <button
-              onClick={() => setCurrentTab('settings')}
+              onClick={() => {
+                setCurrentTab('settings');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'settings' 
                   ? 'bg-purple-600 text-white shadow-md' 
@@ -2898,15 +3034,16 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
             </div>
           )}
 
-          {currentTab === 'settings' && <UserSettingsInline />}
+          {currentTab === 'settings' && <UserSettings />}
         </div>
       </div>
     </div>
   );
 };
 
-// User Settings Component (Inline)
-const UserSettingsInline = () => {
+// OLD COMPONENT - Now using imported UserSettings component above
+/*
+const UserSettingsInline_OLD = () => {
   const [ilpConfig, setIlpConfig] = useState({ publicKey: '', secretKey: '', credits: 0 });
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -3086,6 +3223,7 @@ const UserSettingsInline = () => {
     </div>
   );
 };
+*/
 
 // All Documents View Component for Admin
 const AllDocumentsView = () => {
@@ -3098,6 +3236,8 @@ const AllDocumentsView = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -3105,12 +3245,18 @@ const AllDocumentsView = () => {
     fetchDocuments();
   }, [filter]);
 
-  // Client-side filtering based on search term
+  // Reset to first page when search term or filter changes
   useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setDocuments(allDocuments);
-    } else {
-      const filtered = allDocuments.filter(doc => {
+    setCurrentPage(1);
+  }, [searchTerm, filter]);
+
+  // Client-side filtering and pagination
+  useEffect(() => {
+    let filtered = allDocuments;
+    
+    // Apply search filter
+    if (searchTerm.trim() !== '') {
+      filtered = allDocuments.filter(doc => {
         const search = searchTerm.toLowerCase();
         const clientName = (doc.client_name || '').toLowerCase();
         const pensionNo = (doc.client_pension_no || '').toLowerCase();
@@ -3122,9 +3268,15 @@ const AllDocumentsView = () => {
                policyNo.includes(search) || 
                documentRef.includes(search);
       });
-      setDocuments(filtered);
     }
-  }, [searchTerm, allDocuments]);
+    
+    // Apply pagination
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginated = filtered.slice(startIndex, endIndex);
+    
+    setDocuments(paginated);
+  }, [searchTerm, allDocuments, currentPage, itemsPerPage]);
 
   const fetchDocuments = async () => {
     const token = localStorage.getItem('token');
@@ -3140,7 +3292,7 @@ const AllDocumentsView = () => {
       if (response.ok) {
         const data = await response.json();
         setAllDocuments(data.documents || []);
-        setDocuments(data.documents || []);
+        // Don't set documents here - let the useEffect handle pagination
         if (data.documents && data.documents.length === 0) {
           setMessage({ type: 'info', text: 'No documents found. Documents will appear here when staff generate them.' });
         }
@@ -3412,6 +3564,116 @@ const AllDocumentsView = () => {
             )}
           </tbody>
         </table>
+        
+        {/* Pagination Controls */}
+        {(() => {
+          let filtered = allDocuments;
+          if (searchTerm.trim() !== '') {
+            filtered = allDocuments.filter(doc => {
+              const search = searchTerm.toLowerCase();
+              const clientName = (doc.client_name || '').toLowerCase();
+              const pensionNo = (doc.client_pension_no || '').toLowerCase();
+              const policyNo = (doc.policy_number || '').toLowerCase();
+              const documentRef = (doc.document_ref || '').toLowerCase();
+              return clientName.includes(search) || pensionNo.includes(search) || policyNo.includes(search) || documentRef.includes(search);
+            });
+          }
+          const totalPages = Math.ceil(filtered.length / itemsPerPage);
+          const startItem = (currentPage - 1) * itemsPerPage + 1;
+          const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
+          
+          if (totalPages <= 1) return null;
+          
+          return (
+            <div style={{ 
+              marginTop: '1.5rem', 
+              padding: '0 1.5rem 1.5rem',
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              flexWrap: 'wrap', 
+              gap: '1rem'
+            }}>
+              <div style={{ 
+                fontSize: '0.875rem', 
+                color: '#666',
+                flex: '1 1 auto',
+                minWidth: '200px'
+              }}>
+                Showing {startItem} to {endItem} of {filtered.length} documents
+              </div>
+              <div style={{ 
+                display: 'flex', 
+                gap: '0.5rem', 
+                alignItems: 'center',
+                flexWrap: 'wrap'
+              }}>
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    backgroundColor: 'white',
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    opacity: currentPage === 1 ? 0.5 : 1,
+                    transition: 'all 0.2s',
+                    fontSize: '0.875rem',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseOver={(e) => {
+                    if (currentPage !== 1) {
+                      e.target.style.backgroundColor = '#f9fafb';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (currentPage !== 1) {
+                      e.target.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  Previous
+                </button>
+                <span style={{ 
+                  padding: '8px 8px', 
+                  fontSize: '0.875rem', 
+                  fontWeight: '500',
+                  whiteSpace: 'nowrap'
+                }}>
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    backgroundColor: 'white',
+                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                    opacity: currentPage === totalPages ? 0.5 : 1,
+                    transition: 'all 0.2s',
+                    fontSize: '0.875rem',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseOver={(e) => {
+                    if (currentPage !== totalPages) {
+                      e.target.style.backgroundColor = '#f9fafb';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (currentPage !== totalPages) {
+                      e.target.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -3505,6 +3767,7 @@ const AllDocumentsView = () => {
 
 const StaffDashboardSimple = ({ onLogout, userName }) => {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [myDocuments, setMyDocuments] = useState([]);
   const [allDocuments, setAllDocuments] = useState([]); // Store all documents for client-side filtering
   const [stats, setStats] = useState(null);
@@ -3643,21 +3906,49 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
   return (
     <div className="min-h-screen bg-gray-100">
       <nav className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">Staff Dashboard</h1>
         <div className="flex items-center gap-4">
-          <span className="text-white font-medium">Welcome, {userName}</span>
-          <button onClick={onLogout} className="bg-white text-blue-700 px-4 py-2 rounded-lg hover:bg-gray-100 font-semibold transition-colors">
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="md:hidden text-white p-2 hover:bg-blue-700 rounded-lg transition-colors"
+            aria-label="Toggle sidebar"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {isSidebarOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Staff Dashboard</h1>
+        </div>
+        <div className="flex items-center gap-2 md:gap-4">
+          <span className="text-white font-medium text-sm md:text-base hidden sm:inline">Welcome, {userName}</span>
+          <button onClick={onLogout} className="bg-white text-blue-700 px-3 md:px-4 py-2 rounded-lg hover:bg-gray-100 font-semibold transition-colors text-sm md:text-base">
             Logout
           </button>
         </div>
       </nav>
       
-      <div className="flex">
+      {/* Mobile backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+      
+      <div className="flex relative">
         {/* Sidebar */}
-        <div className="w-64 bg-gradient-to-b from-gray-800 to-gray-900 shadow-lg min-h-screen p-4">
+        <div className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-gray-800 to-gray-900 shadow-lg min-h-screen p-4 transform transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}>
           <div className="space-y-2">
             <button
-              onClick={() => setCurrentTab('dashboard')}
+              onClick={() => {
+                setCurrentTab('dashboard');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'dashboard' 
                   ? 'bg-blue-600 text-white shadow-md' 
@@ -3667,7 +3958,10 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
               📊 Dashboard
             </button>
             <button
-              onClick={() => setCurrentTab('generate')}
+              onClick={() => {
+                setCurrentTab('generate');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'generate' 
                   ? 'bg-blue-600 text-white shadow-md' 
@@ -3677,7 +3971,10 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
               ✏️ Generate Documents
             </button>
             <button
-              onClick={() => setCurrentTab('my-documents')}
+              onClick={() => {
+                setCurrentTab('my-documents');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'my-documents' 
                   ? 'bg-blue-600 text-white shadow-md' 
@@ -3687,7 +3984,10 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
               📄 My Documents
             </button>
             <button
-              onClick={() => setCurrentTab('settings')}
+              onClick={() => {
+                setCurrentTab('settings');
+                setIsSidebarOpen(false);
+              }}
               className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
                 currentTab === 'settings' 
                   ? 'bg-blue-600 text-white shadow-md' 
@@ -3750,120 +4050,124 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
                 />
               </div>
               
-              <div className="bg-white p-6 rounded-lg shadow">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4">Pension #</th>
-                      <th className="text-left py-3 px-4">Client Name</th>
-                      <th className="text-left py-3 px-4">Status</th>
-                      <th className="text-left py-3 px-4">Date</th>
-                      <th className="text-center py-3 px-4">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {myDocuments.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="text-center py-6 text-gray-500">
-                          No documents yet. Click "Generate Documents" to start!
-                        </td>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4">Pension #</th>
+                        <th className="text-left py-3 px-4">Client Name</th>
+                        <th className="text-left py-3 px-4">Status</th>
+                        <th className="text-left py-3 px-4">Date</th>
+                        <th className="text-center py-3 px-4">Action</th>
                       </tr>
-                    ) : (
-                      myDocuments.map((doc) => (
-                        <tr key={doc.id} className="border-b hover:bg-gray-50">
-                          <td className="py-3 px-4">{doc.client_pension_no || doc.policy_number}</td>
-                          <td className="py-3 px-4">{doc.client_name}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                              doc.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              doc.status === 'approved' ? 'bg-green-100 text-green-800' :
-                              doc.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {doc.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">{new Date(doc.generated_at).toLocaleDateString()}</td>
-                          <td className="py-3 px-4">
-                            {doc.indicative_pdf_path ? (
-                              <div className="flex gap-2 justify-center">
-                                <button 
-                                  onClick={() => handleDownloadPdf(doc.id, 'view')}
-                                  className="px-3 py-1 border border-green-500 text-green-600 rounded hover:bg-green-500 hover:text-white transition-colors text-sm font-medium"
-                                >
-                                  👁️ View PDF
-                                </button>
-                                <button 
-                                  onClick={() => handleDownloadPdf(doc.id, 'download')}
-                                  className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-500 hover:text-white transition-colors text-sm font-medium"
-                                >
-                                  📥 Download PDF
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">N/A</span>
-                            )}
+                    </thead>
+                    <tbody>
+                      {myDocuments.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="text-center py-6 text-gray-500">
+                            No documents yet. Click "Generate Documents" to start!
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-                <p className="text-sm text-gray-500 mt-4">
-                  Note: You can only view Indicative PDFs. Combined PDFs are available to Super Admin only.
-                </p>
+                      ) : (
+                        myDocuments.map((doc) => (
+                          <tr key={doc.id} className="border-b hover:bg-gray-50">
+                            <td className="py-3 px-4">{doc.client_pension_no || doc.policy_number}</td>
+                            <td className="py-3 px-4">{doc.client_name}</td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                doc.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                doc.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                doc.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {doc.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">{new Date(doc.generated_at).toLocaleDateString()}</td>
+                            <td className="py-3 px-4">
+                              {doc.indicative_pdf_path ? (
+                                <div className="flex gap-2 justify-center">
+                                  <button 
+                                    onClick={() => handleDownloadPdf(doc.id, 'view')}
+                                    className="px-3 py-1 border border-green-500 text-green-600 rounded hover:bg-green-500 hover:text-white transition-colors text-sm font-medium whitespace-nowrap"
+                                  >
+                                    👁️ View PDF
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDownloadPdf(doc.id, 'download')}
+                                    className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-500 hover:text-white transition-colors text-sm font-medium whitespace-nowrap"
+                                  >
+                                    📥 Download PDF
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-sm">N/A</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-6 pt-4">
+                  <p className="text-sm text-gray-500 mt-4">
+                    Note: You can only view Indicative PDFs. Combined PDFs are available to Super Admin only.
+                  </p>
                 
-                {/* Pagination Controls */}
-                {(() => {
-                  let filtered = allDocuments;
-                  if (searchTerm.trim() !== '') {
-                    filtered = allDocuments.filter(doc => {
-                      const search = searchTerm.toLowerCase();
-                      const clientName = (doc.client_name || '').toLowerCase();
-                      const pensionNo = (doc.client_pension_no || '').toLowerCase();
-                      const policyNo = (doc.policy_number || '').toLowerCase();
-                      const documentRef = (doc.document_ref || '').toLowerCase();
-                      return clientName.includes(search) || pensionNo.includes(search) || policyNo.includes(search) || documentRef.includes(search);
-                    });
-                  }
-                  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-                  const startItem = (currentPage - 1) * itemsPerPage + 1;
-                  const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
-                  
-                  if (totalPages <= 1) return null;
-                  
-                  return (
-                    <div className="mt-6 flex items-center justify-between">
-                      <div className="text-sm text-gray-600">
-                        Showing {startItem} to {endItem} of {filtered.length} documents
+                  {/* Pagination Controls */}
+                  {(() => {
+                    let filtered = allDocuments;
+                    if (searchTerm.trim() !== '') {
+                      filtered = allDocuments.filter(doc => {
+                        const search = searchTerm.toLowerCase();
+                        const clientName = (doc.client_name || '').toLowerCase();
+                        const pensionNo = (doc.client_pension_no || '').toLowerCase();
+                        const policyNo = (doc.policy_number || '').toLowerCase();
+                        const documentRef = (doc.document_ref || '').toLowerCase();
+                        return clientName.includes(search) || pensionNo.includes(search) || policyNo.includes(search) || documentRef.includes(search);
+                      });
+                    }
+                    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                    const startItem = (currentPage - 1) * itemsPerPage + 1;
+                    const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
+                    
+                    if (totalPages <= 1) return null;
+                    
+                    return (
+                      <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="text-sm text-gray-600">
+                          Showing {startItem} to {endItem} of {filtered.length} documents
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <span className="px-4 py-2 text-sm font-medium">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Previous
-                        </button>
-                        <span className="px-4 py-2 text-sm font-medium">
-                          Page {currentPage} of {totalPages}
-                        </span>
-                        <button
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          disabled={currentPage === totalPages}
-                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
+                </div>
               </div>
             </div>
           )}
 
-          {currentTab === 'settings' && <UserSettingsInline />}
+          {currentTab === 'settings' && <UserSettings />}
         </div>
       </div>
     </div>
