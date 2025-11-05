@@ -3238,6 +3238,8 @@ const AllDocumentsView = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [downloadingDocId, setDownloadingDocId] = useState(null);
+  const [downloadingAction, setDownloadingAction] = useState(null);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -3306,6 +3308,10 @@ const AllDocumentsView = () => {
   };
 
   const handleDownloadPdf = async (docId, action = 'download') => {
+    // Set downloading state
+    setDownloadingDocId(docId);
+    setDownloadingAction(action);
+    
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/api/admin/documents/${docId}/download?action=${action}`, {
@@ -3349,6 +3355,10 @@ const AllDocumentsView = () => {
     } catch (error) {
       console.error('Download error:', error);
       alert('Failed to download PDF');
+    } finally {
+      // Clear downloading state
+      setDownloadingDocId(null);
+      setDownloadingAction(null);
     }
   };
 
@@ -3534,17 +3544,57 @@ const AllDocumentsView = () => {
                         <>
                       <button
                             onClick={() => handleDownloadPdf(doc.id, 'view')}
-                            className="px-3 py-1 border border-green-500 text-green-600 rounded hover:bg-green-500 hover:text-white transition-colors text-sm font-medium"
+                            disabled={downloadingDocId === doc.id && downloadingAction === 'view'}
+                            className={`px-3 py-1 border rounded transition-colors text-sm font-medium flex items-center gap-2 ${
+                              downloadingDocId === doc.id && downloadingAction === 'view'
+                                ? 'border-gray-400 text-gray-400 cursor-not-allowed opacity-60'
+                                : 'border-green-500 text-green-600 hover:bg-green-500 hover:text-white'
+                            }`}
                             title="View PDF"
                       >
-                            👁️ View
+                            {downloadingDocId === doc.id && downloadingAction === 'view' ? (
+                              <>
+                                <span style={{ 
+                                  display: 'inline-block',
+                                  width: '12px',
+                                  height: '12px',
+                                  border: '2px solid #9ca3af',
+                                  borderTop: '2px solid transparent',
+                                  borderRadius: '50%',
+                                  animation: 'spin 1s linear infinite'
+                                }} />
+                                Loading...
+                              </>
+                            ) : (
+                              '👁️ View'
+                            )}
                       </button>
                           <button
                             onClick={() => handleDownloadPdf(doc.id, 'download')}
-                            className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-500 hover:text-white transition-colors text-sm font-medium"
+                            disabled={downloadingDocId === doc.id && downloadingAction === 'download'}
+                            className={`px-3 py-1 border rounded transition-colors text-sm font-medium flex items-center gap-2 ${
+                              downloadingDocId === doc.id && downloadingAction === 'download'
+                                ? 'border-gray-400 text-gray-400 cursor-not-allowed opacity-60'
+                                : 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white'
+                            }`}
                             title="Download PDF"
                           >
-                            📥 Download
+                            {downloadingDocId === doc.id && downloadingAction === 'download' ? (
+                              <>
+                                <span style={{ 
+                                  display: 'inline-block',
+                                  width: '12px',
+                                  height: '12px',
+                                  border: '2px solid #9ca3af',
+                                  borderTop: '2px solid transparent',
+                                  borderRadius: '50%',
+                                  animation: 'spin 1s linear infinite'
+                                }} />
+                                Downloading...
+                              </>
+                            ) : (
+                              '📥 Download'
+                            )}
                           </button>
                         </>
                       ) : (
@@ -4090,15 +4140,55 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
                                 <div className="flex gap-2 justify-center">
                                   <button 
                                     onClick={() => handleDownloadPdf(doc.id, 'view')}
-                                    className="px-3 py-1 border border-green-500 text-green-600 rounded hover:bg-green-500 hover:text-white transition-colors text-sm font-medium whitespace-nowrap"
+                                    disabled={downloadingDocId === doc.id && downloadingAction === 'view'}
+                                    className={`px-3 py-1 border rounded transition-colors text-sm font-medium whitespace-nowrap flex items-center gap-2 ${
+                                      downloadingDocId === doc.id && downloadingAction === 'view'
+                                        ? 'border-gray-400 text-gray-400 cursor-not-allowed opacity-60'
+                                        : 'border-green-500 text-green-600 hover:bg-green-500 hover:text-white'
+                                    }`}
                                   >
-                                    👁️ View PDF
+                                    {downloadingDocId === doc.id && downloadingAction === 'view' ? (
+                                      <>
+                                        <span style={{ 
+                                          display: 'inline-block',
+                                          width: '12px',
+                                          height: '12px',
+                                          border: '2px solid #9ca3af',
+                                          borderTop: '2px solid transparent',
+                                          borderRadius: '50%',
+                                          animation: 'spin 1s linear infinite'
+                                        }} />
+                                        Loading...
+                                      </>
+                                    ) : (
+                                      '👁️ View PDF'
+                                    )}
                                   </button>
                                   <button 
                                     onClick={() => handleDownloadPdf(doc.id, 'download')}
-                                    className="px-3 py-1 border border-blue-500 text-blue-600 rounded hover:bg-blue-500 hover:text-white transition-colors text-sm font-medium whitespace-nowrap"
+                                    disabled={downloadingDocId === doc.id && downloadingAction === 'download'}
+                                    className={`px-3 py-1 border rounded transition-colors text-sm font-medium whitespace-nowrap flex items-center gap-2 ${
+                                      downloadingDocId === doc.id && downloadingAction === 'download'
+                                        ? 'border-gray-400 text-gray-400 cursor-not-allowed opacity-60'
+                                        : 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white'
+                                    }`}
                                   >
-                                    📥 Download PDF
+                                    {downloadingDocId === doc.id && downloadingAction === 'download' ? (
+                                      <>
+                                        <span style={{ 
+                                          display: 'inline-block',
+                                          width: '12px',
+                                          height: '12px',
+                                          border: '2px solid #9ca3af',
+                                          borderTop: '2px solid transparent',
+                                          borderRadius: '50%',
+                                          animation: 'spin 1s linear infinite'
+                                        }} />
+                                        Downloading...
+                                      </>
+                                    ) : (
+                                      '📥 Download PDF'
+                                    )}
                                   </button>
                                 </div>
                               ) : (
