@@ -187,6 +187,8 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
   const [isBackgroundProcessing, setIsBackgroundProcessing] = useState(false);
   const [showPensionModal, setShowPensionModal] = useState(false);
   const [showMortgageModal, setShowMortgageModal] = useState(false);
+  const [excelFile, setExcelFile] = useState(null);
+  const [isUploadingExcel, setIsUploadingExcel] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [mortgageSearchTerm, setMortgageSearchTerm] = useState('');
   const [currentPolicyNumber, setCurrentPolicyNumber] = useState('');
@@ -372,43 +374,47 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
         return;
       }
       
-      console.log('🔑 Loading iLovePDF credits with token...');
+      console.log('🔑 Loading iLovePDF active key credits...');
       
-      // Use multi-key API to get primary key
-      const keysRes = await fetch(`${apiUrl}/api/ilp/keys`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (keysRes.ok) {
-        const keysData = await keysRes.json();
-        const keys = keysData.keys || [];
+      // Use active-key endpoint to get ONLY the currently active key with live credits
+      // This is the most efficient - only checks the active key, not all keys
+      try {
+        const activeKeyRes = await fetch(`${apiUrl}/api/ilp/active-key`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        // Find the primary key (highest priority)
-        const primaryKey = keys.length > 0 ? keys.reduce((prev, curr) => 
-          (curr.priority || 0) > (prev.priority || 0) ? curr : prev
-        ) : null;
-        
-        if (primaryKey) {
-          setIlpPublicKey(primaryKey.publicKey || '');
-          const credits = primaryKey.lastKnownCredits || 0;
-          setIlpCredits(credits);
-          console.log('💳 DocumentGenerator loaded primary key:', primaryKey.publicKey.substring(0, 20) + '...', 'Credits:', credits);
-        } else {
-          // Fallback to single-key endpoint
-          const cfgRes = await fetch(`${apiUrl}/api/ilp/my-config`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-      if (cfgRes.ok) {
-        const cfg = await cfgRes.json();
-        setIlpPublicKey(cfg.publicKey || '');
-        const credits = cfg.credits || 0;
-        setIlpCredits(credits);
-            console.log('💳 DocumentGenerator loaded from single-key endpoint:', credits);
+        if (activeKeyRes.ok) {
+          const activeKeyData = await activeKeyRes.json();
+          if (activeKeyData.success && activeKeyData.activeKey) {
+            const activeKey = activeKeyData.activeKey;
+            setIlpPublicKey(activeKey.publicKey || '');
+            const credits = activeKey.credits || 0;
+            setIlpCredits(credits);
+            console.log('💳 DocumentGenerator loaded active key:', activeKey.publicKey?.substring(0, 20) + '...', 'Credits:', credits);
+            return;
           }
         }
-      } else {
-        const errorText = await keysRes.text();
-        console.error('❌ Failed to load keys, status:', keysRes.status, errorText);
+      } catch (e) {
+        console.warn('⚠️ Active key endpoint failed, trying single-key fallback:', e.message);
+      }
+      
+      // Fallback: Use single-key endpoint (only checks one key, not all keys)
+      // This is still efficient - only fetches credits for the user's single key
+      try {
+        const cfgRes = await fetch(`${apiUrl}/api/ilp/my-config`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (cfgRes.ok) {
+          const cfg = await cfgRes.json();
+          setIlpPublicKey(cfg.publicKey || '');
+          const credits = cfg.credits || 0;
+          setIlpCredits(credits);
+          console.log('💳 DocumentGenerator loaded from single-key endpoint:', credits);
+        } else {
+          setIlpCredits(0);
+        }
+      } catch (e) {
+        console.error('❌ Single-key endpoint also failed:', e.message);
         setIlpCredits(0);
       }
     } catch (e) {
@@ -468,46 +474,29 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       
       const token = localStorage.getItem('token');
       
-      // First get all keys to find primary key
-      const keysRes = await fetch(`${apiUrl}/api/ilp/keys`, {
+      // Use active-key endpoint which always returns live credits
+      const res = await fetch(`${apiUrl}/api/ilp/active-key`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      if (!keysRes.ok) {
-        throw new Error('Failed to load keys');
+      if (!res.ok) {
+        throw new Error('Failed to load active key');
       }
-      
-      const keysData = await keysRes.json();
-      const keys = keysData.keys || [];
-      
-      // Find primary key (highest priority)
-      const primaryKey = keys.length > 0 ? keys.reduce((prev, curr) => 
-        (curr.priority || 0) > (prev.priority || 0) ? curr : prev
-      ) : null;
-      
-      if (!primaryKey) {
-        throw new Error('No primary key found');
-      }
-      
-      // Refresh credits for primary key
-      const res = await fetch(`${apiUrl}/api/ilp/keys/${primaryKey.id}/refresh`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
       
       const data = await readJsonSafely(res);
-      if (!res.ok) {
-        const text = await readTextSafely(res);
-        throw new Error((data && data.error) || text || 'Failed to fetch credits');
+      if (!data.success || !data.activeKey) {
+        throw new Error('No active key found');
       }
       
-      const credits = data.credits || 0;
+      const activeKey = data.activeKey;
+      const credits = activeKey.credits || 0;
       setIlpCredits(credits);
-      setIlpPublicKey(primaryKey.publicKey);
-      console.log('💳 DocumentGenerator refreshed LIVE credits from primary key:', credits);
+      setIlpPublicKey(activeKey.publicKey || '');
+      console.log('💳 DocumentGenerator refreshed LIVE credits from active key:', credits);
       showStatus(`Credits: ${credits}`, 'success');
       setTimeout(() => setStatus(prev => ({ ...prev, visible: false })), 2000);
     } catch (e) {
+      console.error('❌ Refresh credits error:', e);
       showStatus(`Failed to fetch credits: ${e.message}`, 'error');
     }
   };
@@ -1367,32 +1356,168 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
         }, 100);
       }, 100);
       
-      showStatus(`Custom ordered documents downloaded successfully!<br/>Check your Downloads folder for the PDF file.<br/>File size: ${(blob.size / 1024).toFixed(2)} KB`, 'success');
-      
-      // Clear form fields after successful generation
-      clearFormFields();
-      
-      // Refresh policy number after successful generation
-      getCurrentPolicyNumber();
-      
-      // Refresh iLovePDF credits to reflect usage
-      refreshIlpCredits();
-      
-      // For staff users, show background processing state
+      // For staff users, switch to background processing state after PDF download
       if (isStaff) {
-        setIsBackgroundProcessing(true);
+        // Clear loading state immediately after PDF download completes
+        setIsLoading(false);
+        
         showStatus(`✅ Indicative PDF downloaded!<br/>🔄 Background processing: Merging and uploading combined PDF...<br/>📄 Document will appear in "My Documents" when complete.`, 'info');
         
-        // Set a timeout to clear background processing state (background job typically takes 30-60 seconds)
-        setTimeout(() => {
-          setIsBackgroundProcessing(false);
-          showStatus(`✅ Background processing complete!<br/>📄 Check "My Documents" to see your new document.`, 'success');
+        // Set background processing state (button will show "Background Processing..." and stay disabled)
+        setIsBackgroundProcessing(true);
+        
+        // Poll for upload completion instead of using timeout
+        const pollForUploadCompletion = async () => {
+          const maxAttempts = 60; // 60 attempts = 60 seconds max
+          let attempts = 0;
           
-          // Refresh dashboard data after background processing completes
-          if (window.refreshStaffDashboard) {
-            window.refreshStaffDashboard();
-          }
-        }, 60000); // 60 seconds timeout
+          const poll = async () => {
+            try {
+              const token = localStorage.getItem('token');
+              console.log(`[Tab ${tabId.slice(-4)}] Polling upload status (attempt ${attempts + 1}/${maxAttempts})...`);
+              
+              const checkRes = await fetch(
+                `${apiUrl}/api/staff/document/check-upload?pensionNo=${encodeURIComponent(formData.pensionNo)}&clientName=${encodeURIComponent(formData.name)}`,
+                {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                }
+              );
+              
+              if (!checkRes.ok) {
+                console.warn(`[Tab ${tabId.slice(-4)}] Upload check failed with status:`, checkRes.status);
+                const errorText = await checkRes.text().catch(() => 'Unknown error');
+                console.warn(`[Tab ${tabId.slice(-4)}] Error response:`, errorText);
+                // Continue polling on error (might be transient)
+                attempts++;
+                if (attempts < maxAttempts) {
+                  setTimeout(poll, 1000);
+                } else {
+                  setIsLoading(false);
+                  setIsBackgroundProcessing(false);
+                  showStatus(`⚠️ Could not verify upload status after ${maxAttempts} attempts.<br/>Please check "My Documents" to see if the document was uploaded.`, 'info');
+                  if (window.refreshStaffDashboard) {
+                    window.refreshStaffDashboard(true);
+                  }
+                }
+                return;
+              }
+              
+              const status = await checkRes.json();
+              console.log(`[Tab ${tabId.slice(-4)}] Upload status:`, {
+                exists: status.exists,
+                uploaded: status.uploaded,
+                indicativeUploaded: status.indicativeUploaded,
+                combinedUploaded: status.combinedUploaded,
+                documentId: status.documentId
+              });
+              
+              if (status.uploaded === true) {
+                // Both PDFs uploaded!
+                console.log(`[Tab ${tabId.slice(-4)}] ✅ Upload complete! Stopping polling.`);
+                setIsLoading(false);
+                setIsBackgroundProcessing(false);
+                showStatus(`✅ Background processing complete!<br/>📄 Both indicative and combined PDFs uploaded successfully.<br/>Check "My Documents" to see your new document.`, 'success');
+                
+                // Refresh dashboard data (with a small delay to ensure DB is updated)
+                setTimeout(() => {
+                  if (window.refreshStaffDashboard) {
+                    window.refreshStaffDashboard(true); // Force refresh
+                  }
+                }, 1000);
+                
+                // Clear form fields after successful generation
+                clearFormFields();
+                
+                // Refresh policy number
+                getCurrentPolicyNumber();
+                
+                // Refresh iLovePDF credits
+                refreshIlpCredits();
+                
+                return; // Stop polling
+              } else if (status.exists === true) {
+                // Document exists but uploads not complete yet
+                const statusMsg = [];
+                if (status.indicativeUploaded === true) statusMsg.push('✅ Indicative PDF uploaded');
+                else statusMsg.push('⏳ Indicative PDF uploading...');
+                
+                if (status.combinedUploaded === true) statusMsg.push('✅ Combined PDF uploaded');
+                else statusMsg.push('⏳ Combined PDF uploading...');
+                
+                showStatus(`🔄 Background processing: ${statusMsg.join('<br/>')}`, 'info');
+                
+                // Continue polling
+                attempts++;
+                if (attempts < maxAttempts) {
+                  setTimeout(poll, 1000);
+                } else {
+                  // Timeout - but document exists, so it might still be processing
+                  setIsLoading(false);
+                  setIsBackgroundProcessing(false);
+                  showStatus(`⚠️ Upload check timeout after ${maxAttempts} seconds.<br/>Document exists but uploads may still be in progress.<br/>Please check "My Documents" in a few moments.`, 'info');
+                  
+                  // Still refresh dashboard
+                  if (window.refreshStaffDashboard) {
+                    window.refreshStaffDashboard(true); // Force refresh
+                  }
+                }
+              } else {
+                // Document doesn't exist yet - continue polling
+                console.log(`[Tab ${tabId.slice(-4)}] Document not found yet, continuing to poll...`);
+                attempts++;
+                if (attempts < maxAttempts) {
+                  setTimeout(poll, 1000);
+                } else {
+                  // Timeout - document not found
+                  setIsLoading(false);
+                  setIsBackgroundProcessing(false);
+                  showStatus(`⚠️ Document not found after ${maxAttempts} seconds.<br/>The background job may have failed. Please try generating again.`, 'warning');
+                  
+                  // Still refresh dashboard in case it was created
+                  if (window.refreshStaffDashboard) {
+                    window.refreshStaffDashboard(true);
+                  }
+                }
+              }
+            } catch (pollError) {
+              console.error(`[Tab ${tabId.slice(-4)}] Poll error:`, pollError);
+              attempts++;
+              if (attempts < maxAttempts) {
+                // Continue polling on error (might be transient network issue)
+                setTimeout(poll, 1000);
+              } else {
+                setIsLoading(false);
+                setIsBackgroundProcessing(false);
+                showStatus(`⚠️ Could not verify upload status after ${maxAttempts} attempts.<br/>Please check "My Documents" to see if the document was uploaded.`, 'info');
+                
+                // Still refresh dashboard in case upload succeeded
+                if (window.refreshStaffDashboard) {
+                  window.refreshStaffDashboard(true);
+                }
+              }
+            }
+          };
+          
+          // Start polling after 2 seconds (give server time to start processing)
+          setTimeout(poll, 2000);
+        };
+        
+        // Start polling
+        pollForUploadCompletion();
+      } else {
+        // For non-staff users, clear loading state after download
+        showStatus(`Custom ordered documents downloaded successfully!<br/>Check your Downloads folder for the PDF file.<br/>File size: ${(blob.size / 1024).toFixed(2)} KB`, 'success');
+        
+        // Clear form fields after successful generation
+        clearFormFields();
+        
+        // Refresh policy number after successful generation
+        getCurrentPolicyNumber();
+        
+        // Refresh iLovePDF credits to reflect usage
+        refreshIlpCredits();
+        
+        setIsLoading(false);
       }
       
     } catch (error) {
@@ -1400,9 +1525,105 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       
       // Show error message instead of automatic fallback to prevent multiple concurrent requests
       showStatus(`❌ Custom order generation failed: ${error.message}`, 'error');
-      throw error;
-    } finally {
+      
+      // Clear loading states on error
       setIsLoading(false);
+      setIsBackgroundProcessing(false);
+      throw error;
+    }
+  };
+
+  // Handle Excel file upload and batch document generation
+  const handleExcelUpload = async (e) => {
+    e.preventDefault();
+    
+    if (!excelFile) {
+      showStatus('Please select an Excel file to upload', 'error');
+      return;
+    }
+
+    // Validate file type
+    const fileExt = excelFile.name.toLowerCase().split('.').pop();
+    if (!['xlsx', 'xls'].includes(fileExt)) {
+      showStatus('Please upload a valid Excel file (.xlsx or .xls)', 'error');
+      return;
+    }
+
+    setIsUploadingExcel(true);
+    showStatus('Uploading Excel file and processing...', 'info');
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('excelFile', excelFile);
+
+      const response = await fetch(`${apiUrl}/api/generate-documents-from-excel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to process Excel file';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          if (errorData.errors && errorData.errors.length > 0) {
+            errorMessage += `\n\nErrors:\n${errorData.errors.map((err, idx) => 
+              `Row ${err.rowNumber} (${err.name}): ${err.error}`
+            ).join('\n')}`;
+          }
+        } catch (e) {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Check if response is a ZIP file
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/zip')) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `documents_batch_${Date.now()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showStatus(`✅ Successfully generated documents from Excel file! ZIP file downloaded.`, 'success');
+        setExcelFile(null);
+        // Reset file input
+        const fileInput = document.getElementById('excel-file-input');
+        if (fileInput) fileInput.value = '';
+      } else {
+        // Handle JSON response (errors)
+        const data = await response.json();
+        throw new Error(data.error || data.message || 'Unknown error occurred');
+      }
+    } catch (error) {
+      console.error('Excel upload error:', error);
+      showStatus(`❌ Excel processing failed: ${error.message}`, 'error');
+    } finally {
+      setIsUploadingExcel(false);
+    }
+  };
+
+  const handleExcelFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const fileExt = file.name.toLowerCase().split('.').pop();
+      if (!['xlsx', 'xls'].includes(fileExt)) {
+        showStatus('Please select a valid Excel file (.xlsx or .xls)', 'error');
+        e.target.value = '';
+        return;
+      }
+      setExcelFile(file);
+      showStatus(`📄 Excel file selected: ${file.name}`, 'info');
     }
   };
 
@@ -1521,6 +1742,93 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                 </button>
               </div>
             </div>
+
+            {/*
+            {isAdmin && (
+              <div className="p-4 border border-blue-200 rounded-xl bg-blue-50">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <Upload className="w-5 h-5 text-blue-600" />
+                    Batch Document Generation (Excel Upload)
+                  </h2>
+                </div>
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-700 mb-4">
+                    <p className="mb-2">Upload an Excel file to generate documents for multiple clients at once.</p>
+                    <p className="font-semibold mb-1">Required columns:</p>
+                    <ul className="list-disc list-inside space-y-1 text-xs text-gray-600 ml-2">
+                      <li>Name (or Full Name, Client Name)</li>
+                      <li>CV (or CV Value, CV Amount, Contribution Value)</li>
+                      <li>Pension Company (or Pension Company Name, Pension Fund)</li>
+                      <li>Pension No (or Pension Number, Pension ID)</li>
+                      <li>Pension Company Address (or Pension Fund Address, PFA Address)</li>
+                      <li>Account No (or Account Number, Bank Account)</li>
+                      <li>Address (or Client Address, Residential Address)</li>
+                      <li>DOB (or Date of Birth, Birth Date)</li>
+                      <li>Mortgage Bank (or Bank, Mortgage Bank Name)</li>
+                      <li>Mortgage Bank Address (or Bank Address)</li>
+                    </ul>
+                  </div>
+                  <form onSubmit={handleExcelUpload} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Select Excel File
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          id="excel-file-input"
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={handleExcelFileChange}
+                          className="block w-full text-sm text-gray-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-lg file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100
+                            file:cursor-pointer
+                            cursor-pointer"
+                          disabled={isUploadingExcel}
+                        />
+                        {excelFile && (
+                          <span className="text-sm text-gray-600 flex items-center gap-2">
+                            <FileText className="w-4 h-4" />
+                            {excelFile.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={!excelFile || isUploadingExcel}
+                        className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
+                      >
+                        {isUploadingExcel ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Processing Excel...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-5 h-5" />
+                            Generate Documents from Excel
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <p className="text-xs text-gray-600">
+                      <strong>Note:</strong> The system will process each row in the Excel file and generate a combined PDF for each client. 
+                      All PDFs will be packaged in a ZIP file for download. Processing may take several minutes depending on the number of rows.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            */}
+
             {/* First Row - Name and CV */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-8">
@@ -3825,6 +4133,8 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [downloadingDocId, setDownloadingDocId] = useState(null);
+  const [downloadingAction, setDownloadingAction] = useState(null);
   
   // API URL configuration
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -3874,15 +4184,17 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
     setMyDocuments(paginated);
   }, [searchTerm, allDocuments, currentPage, itemsPerPage]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (forceRefresh = false) => {
     try {
       const token = localStorage.getItem('token');
-      console.log('🔄 Fetching staff dashboard data from:', `${apiUrl}/api/staff/dashboard`);
+      const url = `${apiUrl}/api/staff/dashboard${forceRefresh ? '?refresh=' + Date.now() : ''}`;
+      console.log('🔄 Fetching staff dashboard data from:', url);
       
-      const response = await fetch(`${apiUrl}/api/staff/dashboard`, {
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        cache: forceRefresh ? 'no-cache' : 'default'
       });
 
       console.log('📡 Dashboard API response status:', response.status, response.ok);
@@ -3890,11 +4202,17 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Loaded staff dashboard data for user');
+        console.log('📄 Documents count:', (data.recentDocuments || []).length);
         
         setStats(data.stats);
+        // Only set allDocuments - myDocuments will be updated by the useEffect pagination
         setAllDocuments(data.recentDocuments || []);
-        setMyDocuments(data.recentDocuments || []);
         setNotifications(data.notifications || []);
+        
+        // Reset to first page when refreshing
+        if (forceRefresh) {
+          setCurrentPage(1);
+        }
       } else {
         const errorText = await response.text();
         console.error('❌ Dashboard API error:', response.status, errorText);
@@ -3905,6 +4223,10 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
   };
 
   const handleDownloadPdf = async (docId, action = 'download') => {
+    // Set downloading state
+    setDownloadingDocId(docId);
+    setDownloadingAction(action);
+    
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${apiUrl}/api/staff/document/${docId}/download?action=${action}`, {
@@ -3950,6 +4272,10 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
     } catch (error) {
       console.error('Download error:', error);
       alert('Failed to download PDF');
+    } finally {
+      // Clear downloading state
+      setDownloadingDocId(null);
+      setDownloadingAction(null);
     }
   };
 
