@@ -380,16 +380,16 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       // This is the most efficient - only checks the active key, not all keys
       try {
         const activeKeyRes = await fetch(`${apiUrl}/api/ilp/active-key`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
         if (activeKeyRes.ok) {
           const activeKeyData = await activeKeyRes.json();
           if (activeKeyData.success && activeKeyData.activeKey) {
             const activeKey = activeKeyData.activeKey;
             setIlpPublicKey(activeKey.publicKey || '');
             const credits = activeKey.credits || 0;
-            setIlpCredits(credits);
+          setIlpCredits(credits);
             console.log('💳 DocumentGenerator loaded active key:', activeKey.publicKey?.substring(0, 20) + '...', 'Credits:', credits);
             return;
           }
@@ -401,16 +401,16 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
       // Fallback: Use single-key endpoint (only checks one key, not all keys)
       // This is still efficient - only fetches credits for the user's single key
       try {
-        const cfgRes = await fetch(`${apiUrl}/api/ilp/my-config`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (cfgRes.ok) {
-          const cfg = await cfgRes.json();
-          setIlpPublicKey(cfg.publicKey || '');
-          const credits = cfg.credits || 0;
-          setIlpCredits(credits);
-          console.log('💳 DocumentGenerator loaded from single-key endpoint:', credits);
-        } else {
+          const cfgRes = await fetch(`${apiUrl}/api/ilp/my-config`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+      if (cfgRes.ok) {
+        const cfg = await cfgRes.json();
+        setIlpPublicKey(cfg.publicKey || '');
+        const credits = cfg.credits || 0;
+        setIlpCredits(credits);
+            console.log('💳 DocumentGenerator loaded from single-key endpoint:', credits);
+      } else {
           setIlpCredits(0);
         }
       } catch (e) {
@@ -1361,6 +1361,9 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
         // Clear loading state immediately after PDF download completes
         setIsLoading(false);
         
+        // Clear form fields immediately after indicative PDF download
+        clearFormFields();
+        
         showStatus(`✅ Indicative PDF downloaded!<br/>🔄 Background processing: Merging and uploading combined PDF...<br/>📄 Document will appear in "My Documents" when complete.`, 'info');
         
         // Set background processing state (button will show "Background Processing..." and stay disabled)
@@ -1425,15 +1428,13 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                   }
                 }, 1000);
                 
-                // Clear form fields after successful generation
-                clearFormFields();
-                
+                // Form already cleared after indicative PDF download
                 // Refresh policy number
                 getCurrentPolicyNumber();
                 
                 // Refresh iLovePDF credits
                 refreshIlpCredits();
-                
+      
                 return; // Stop polling
               } else if (status.exists === true) {
                 // Document exists but uploads not complete yet
@@ -1453,11 +1454,11 @@ const DocumentGenerator = ({ onLogout, onBack }) => {
                 } else {
                   // Timeout - but document exists, so it might still be processing
                   setIsLoading(false);
-                  setIsBackgroundProcessing(false);
+          setIsBackgroundProcessing(false);
                   showStatus(`⚠️ Upload check timeout after ${maxAttempts} seconds.<br/>Document exists but uploads may still be in progress.<br/>Please check "My Documents" in a few moments.`, 'info');
-                  
+          
                   // Still refresh dashboard
-                  if (window.refreshStaffDashboard) {
+          if (window.refreshStaffDashboard) {
                     window.refreshStaffDashboard(true); // Force refresh
                   }
                 }
@@ -3068,59 +3069,59 @@ const UserManagementInline = () => {
 
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-medium">Username</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Full Name</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Email</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Role</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium">Username</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Full Name</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Role</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                  No users yet. Click "Create Staff" to add staff members.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
-                    No users yet. Click "Create Staff" to add staff members.
+            ) : (
+              users.map((user) => (
+                <tr key={user.id} className="border-t hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium">{user.username}</td>
+                  <td className="px-4 py-3">{user.full_name}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      user.role === 'super_admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {user.role === 'super_admin' ? 'Admin' : 'Staff'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {user.role !== 'super_admin' && (
+                      <button
+                        onClick={() => handleDeleteUser(user.id, user.username)}
+                        className="text-red-600 hover:text-red-800 text-sm"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
-              ) : (
-                users.map((user) => (
-                  <tr key={user.id} className="border-t hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{user.username}</td>
-                    <td className="px-4 py-3">{user.full_name}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        user.role === 'super_admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {user.role === 'super_admin' ? 'Admin' : 'Staff'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {user.role !== 'super_admin' && (
-                        <button
-                          onClick={() => handleDeleteUser(user.id, user.username)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+              ))
+            )}
+          </tbody>
+        </table>
         </div>
       </div>
     </div>
@@ -4429,43 +4430,43 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
               <div className="bg-white rounded-lg shadow overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4">Pension #</th>
-                        <th className="text-left py-3 px-4">Client Name</th>
-                        <th className="text-left py-3 px-4">Status</th>
-                        <th className="text-left py-3 px-4">Date</th>
-                        <th className="text-center py-3 px-4">Action</th>
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4">Pension #</th>
+                      <th className="text-left py-3 px-4">Client Name</th>
+                      <th className="text-left py-3 px-4">Status</th>
+                      <th className="text-left py-3 px-4">Date</th>
+                      <th className="text-center py-3 px-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myDocuments.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="text-center py-6 text-gray-500">
+                          No documents yet. Click "Generate Documents" to start!
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {myDocuments.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="text-center py-6 text-gray-500">
-                            No documents yet. Click "Generate Documents" to start!
+                    ) : (
+                      myDocuments.map((doc) => (
+                        <tr key={doc.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4">{doc.client_pension_no || doc.policy_number}</td>
+                          <td className="py-3 px-4">{doc.client_name}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              doc.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              doc.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              doc.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {doc.status}
+                            </span>
                           </td>
-                        </tr>
-                      ) : (
-                        myDocuments.map((doc) => (
-                          <tr key={doc.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-4">{doc.client_pension_no || doc.policy_number}</td>
-                            <td className="py-3 px-4">{doc.client_name}</td>
-                            <td className="py-3 px-4">
-                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                doc.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                doc.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                doc.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {doc.status}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">{new Date(doc.generated_at).toLocaleDateString()}</td>
-                            <td className="py-3 px-4">
-                              {doc.indicative_pdf_path ? (
-                                <div className="flex gap-2 justify-center">
-                                  <button 
-                                    onClick={() => handleDownloadPdf(doc.id, 'view')}
+                          <td className="py-3 px-4">{new Date(doc.generated_at).toLocaleDateString()}</td>
+                          <td className="py-3 px-4">
+                            {doc.indicative_pdf_path ? (
+                              <div className="flex gap-2 justify-center">
+                                <button 
+                                  onClick={() => handleDownloadPdf(doc.id, 'view')}
                                     disabled={downloadingDocId === doc.id && downloadingAction === 'view'}
                                     className={`px-3 py-1 border rounded transition-colors text-sm font-medium whitespace-nowrap flex items-center gap-2 ${
                                       downloadingDocId === doc.id && downloadingAction === 'view'
@@ -4489,9 +4490,9 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
                                     ) : (
                                       '👁️ View PDF'
                                     )}
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDownloadPdf(doc.id, 'download')}
+                                </button>
+                                <button 
+                                  onClick={() => handleDownloadPdf(doc.id, 'download')}
                                     disabled={downloadingDocId === doc.id && downloadingAction === 'download'}
                                     className={`px-3 py-1 border rounded transition-colors text-sm font-medium whitespace-nowrap flex items-center gap-2 ${
                                       downloadingDocId === doc.id && downloadingAction === 'download'
@@ -4515,69 +4516,69 @@ const StaffDashboardSimple = ({ onLogout, userName }) => {
                                     ) : (
                                       '📥 Download PDF'
                                     )}
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="text-gray-400 text-sm">N/A</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">N/A</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
                 </div>
                 <div className="p-6 pt-4">
-                  <p className="text-sm text-gray-500 mt-4">
-                    Note: You can only view Indicative PDFs. Combined PDFs are available to Super Admin only.
-                  </p>
+                <p className="text-sm text-gray-500 mt-4">
+                  Note: You can only view Indicative PDFs. Combined PDFs are available to Super Admin only.
+                </p>
                 
-                  {/* Pagination Controls */}
-                  {(() => {
-                    let filtered = allDocuments;
-                    if (searchTerm.trim() !== '') {
-                      filtered = allDocuments.filter(doc => {
-                        const search = searchTerm.toLowerCase();
-                        const clientName = (doc.client_name || '').toLowerCase();
-                        const pensionNo = (doc.client_pension_no || '').toLowerCase();
-                        const policyNo = (doc.policy_number || '').toLowerCase();
-                        const documentRef = (doc.document_ref || '').toLowerCase();
-                        return clientName.includes(search) || pensionNo.includes(search) || policyNo.includes(search) || documentRef.includes(search);
-                      });
-                    }
-                    const totalPages = Math.ceil(filtered.length / itemsPerPage);
-                    const startItem = (currentPage - 1) * itemsPerPage + 1;
-                    const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
-                    
-                    if (totalPages <= 1) return null;
-                    
-                    return (
+                {/* Pagination Controls */}
+                {(() => {
+                  let filtered = allDocuments;
+                  if (searchTerm.trim() !== '') {
+                    filtered = allDocuments.filter(doc => {
+                      const search = searchTerm.toLowerCase();
+                      const clientName = (doc.client_name || '').toLowerCase();
+                      const pensionNo = (doc.client_pension_no || '').toLowerCase();
+                      const policyNo = (doc.policy_number || '').toLowerCase();
+                      const documentRef = (doc.document_ref || '').toLowerCase();
+                      return clientName.includes(search) || pensionNo.includes(search) || policyNo.includes(search) || documentRef.includes(search);
+                    });
+                  }
+                  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                  const startItem = (currentPage - 1) * itemsPerPage + 1;
+                  const endItem = Math.min(currentPage * itemsPerPage, filtered.length);
+                  
+                  if (totalPages <= 1) return null;
+                  
+                  return (
                       <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="text-sm text-gray-600">
-                          Showing {startItem} to {endItem} of {filtered.length} documents
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            Previous
-                          </button>
-                          <span className="px-4 py-2 text-sm font-medium">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <button
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            Next
-                          </button>
-                        </div>
+                      <div className="text-sm text-gray-600">
+                        Showing {startItem} to {endItem} of {filtered.length} documents
                       </div>
-                    );
-                  })()}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Previous
+                        </button>
+                        <span className="px-4 py-2 text-sm font-medium">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
                 </div>
               </div>
             </div>
