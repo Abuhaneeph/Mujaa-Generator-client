@@ -316,7 +316,7 @@ export default function UserSettings() {
                       <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-700 rounded whitespace-nowrap">
                         Priority: {key.priority}
                       </span>
-                    </div>
+          </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2">
                       <div className="flex items-center gap-2">
@@ -334,8 +334,8 @@ export default function UserSettings() {
                           Last checked: {new Date(key.lastCheckedAt).toLocaleString()}
                         </span>
                       )}
-                    </div>
-                  </div>
+          </div>
+        </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {key.priority !== Math.max(...keys.map(k => k.priority || 0), 0) && (
@@ -368,7 +368,7 @@ export default function UserSettings() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
+              </div>
               </div>
                     ))}
                   </>
@@ -406,7 +406,7 @@ export default function UserSettings() {
                       <span className="hidden sm:inline">Next</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
-                  </div>
+              </div>
                 </div>
               );
             })()}
@@ -422,8 +422,8 @@ export default function UserSettings() {
           <p><strong>2. Auto-Switch on Exhaustion:</strong> When a key runs out of credits, the system automatically switches to the next available key</p>
           <p><strong>3. No Manual Updates Needed:</strong> You can add multiple backup keys in advance and the system will rotate through them seamlessly</p>
           <p><strong>4. Refresh to Update:</strong> Click the refresh icon to get the latest credit count from iLovePDF API</p>
-        </div>
-      </div>
+              </div>
+            </div>
 
       {/* Account Information */}
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -438,12 +438,12 @@ export default function UserSettings() {
         <div className="bg-white p-4 rounded-lg shadow sm:col-span-2 md:col-span-1">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1">Role</h3>
           <span className={`px-3 py-1 rounded-full text-xs font-semibold inline-block ${
-            localStorage.getItem('userRole') === 'super_admin'
-              ? 'bg-purple-100 text-purple-700'
-              : 'bg-blue-100 text-blue-700'
-          }`}>
-            {localStorage.getItem('userRole') === 'super_admin' ? 'Super Admin' : 'Staff'}
-          </span>
+                  localStorage.getItem('userRole') === 'super_admin'
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {localStorage.getItem('userRole') === 'super_admin' ? 'Super Admin' : 'Staff'}
+                </span>
         </div>
       </div>
     </div>
