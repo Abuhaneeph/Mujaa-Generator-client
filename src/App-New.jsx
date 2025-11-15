@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import StaffDashboard from './pages/StaffDashboard';
+import ExcelUpload from './pages/ExcelUpload';
 import './App.css';
 
 // Protected Route Component
@@ -43,6 +44,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['super_admin']}>
             <AdminDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/excel-upload" 
+        element={
+          <ProtectedRoute allowedRoles={['super_admin']}>
+            <ExcelUpload />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin" 
+        element={
+          <ProtectedRoute allowedRoles={['super_admin']}>
+            <Navigate to="/admin/dashboard" replace />
           </ProtectedRoute>
         } 
       />

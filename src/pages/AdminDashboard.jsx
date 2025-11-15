@@ -263,6 +263,9 @@ export default function AdminDashboard() {
           <div className="section">
             <h2>Quick Actions</h2>
             <div className="action-buttons">
+              <button className="btn-action" onClick={() => navigate('/admin/excel-upload')}>
+                📊 Excel Batch Upload
+              </button>
               <button className="btn-action" onClick={() => navigate('/admin/users')}>
                 Manage Users
               </button>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, FileText, CheckCircle, AlertCircle, Loader2, X, Building2, Upload, ArrowUpDown, Settings, RefreshCw, Eye, EyeOff, Scissors, Grid3X3, List, RotateCcw, Trash2, Copy, Move, GripVertical, ZoomIn, ZoomOut, Maximize2, Download, Lock, User, LogOut } from 'lucide-react';
 import UserSettings from './components/UserSettings';
+import ExcelUpload from './pages/ExcelUpload';
 
 // Login Component
 const LoginPage = ({ onLogin }) => {
@@ -3264,6 +3265,21 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
             >
               ✏️ Generate Documents
             </button>
+            {/* 
+            <button
+              onClick={() => {
+                setCurrentTab('excel-upload');
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                currentTab === 'excel-upload' 
+                  ? 'bg-purple-600 text-white shadow-md' 
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              📊 Excel Batch Upload
+            </button>
+            */}
             <button
               onClick={() => {
                 setCurrentTab('settings');
@@ -3339,6 +3355,15 @@ const AdminDashboardSimple = ({ onLogout, userName }) => {
               <DocumentGenerator 
                 onLogout={onLogout} 
                 onBack={() => setCurrentTab('dashboard')} 
+              />
+            </div>
+          )}
+
+          {currentTab === 'excel-upload' && (
+            <div className="p-0">
+              <ExcelUpload 
+                onBack={() => setCurrentTab('dashboard')} 
+                onLogout={onLogout}
               />
             </div>
           )}

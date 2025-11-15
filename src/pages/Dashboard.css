@@ -419,3 +419,256 @@ td {
   }
 }
 
+/* Excel Upload Responsive Styles */
+.excel-upload-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.excel-upload-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.excel-upload-title {
+  margin: 0;
+  flex: 1;
+  font-size: 1.5rem;
+}
+
+.excel-instructions-card {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.excel-upload-area {
+  border: 2px dashed;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.excel-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.excel-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+.excel-progress-summary {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.excel-button-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.excel-validation-card {
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.excel-validation-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background-color: white;
+  border-radius: 6px;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .excel-upload-container {
+    padding: 0.75rem;
+  }
+
+  .excel-upload-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .excel-upload-title {
+    font-size: 1.25rem;
+  }
+
+  .excel-instructions-card {
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .excel-upload-area {
+    padding: 2rem 1rem;
+  }
+
+  .excel-progress-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.75rem;
+  }
+
+  .excel-button-group {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .excel-button-group button {
+    width: 100%;
+  }
+
+  .excel-validation-card {
+    padding: 1rem;
+  }
+
+  .excel-validation-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .excel-table {
+    min-width: 600px;
+    font-size: 0.875rem;
+  }
+
+  .excel-table th,
+  .excel-table td {
+    padding: 8px 6px;
+    font-size: 0.75rem;
+  }
+
+  /* Hide less important columns on tablet */
+  .excel-table th:nth-child(5),
+  .excel-table td:nth-child(5),
+  .excel-table th:nth-child(6),
+  .excel-table td:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .excel-upload-container {
+    padding: 0.5rem;
+  }
+
+  .excel-upload-title {
+    font-size: 1.125rem;
+  }
+
+  .excel-instructions-card {
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .excel-upload-area {
+    padding: 1.5rem 0.75rem;
+  }
+
+  .excel-validation-card {
+    padding: 0.75rem;
+  }
+
+  .excel-validation-stats {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  .excel-table {
+    min-width: 500px;
+    font-size: 0.75rem;
+  }
+
+  .excel-table th,
+  .excel-table td {
+    padding: 6px 4px;
+    font-size: 0.7rem;
+  }
+
+  /* Hide more columns on mobile */
+  .excel-table th:nth-child(4),
+  .excel-table td:nth-child(4),
+  .excel-table th:nth-child(5),
+  .excel-table td:nth-child(5),
+  .excel-table th:nth-child(6),
+  .excel-table td:nth-child(6) {
+    display: none;
+  }
+
+  /* Make error column more compact */
+  .excel-table th:last-child,
+  .excel-table td:last-child {
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 360px) {
+  .excel-upload-title {
+    font-size: 1rem;
+  }
+
+  .excel-table {
+    min-width: 400px;
+  }
+
+  .excel-table th,
+  .excel-table td {
+    padding: 4px 2px;
+    font-size: 0.65rem;
+  }
+}
+
+/* Pagination responsive */
+.excel-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .excel-pagination {
+    gap: 0.25rem;
+  }
+
+  .excel-pagination button {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+  }
+
+  .excel-pagination span {
+    font-size: 0.75rem;
+  }
+}
+
